@@ -97,8 +97,32 @@ détecte des anomalies contextuelles/locales (un point atypique par rapport
 dataset). Résultat observé sur les vraies données : seulement 5,3% d'accord
 entre les deux — preuve concrète qu'elles ne font pas la même chose.
 
-**Implication** : un système de priorisation robuste devrait probablement
-combiner les deux plutôt que choisir arbitrairement.
+### Vérifier la scalabilité et la stabilité avant de considérer le bloc terminé
+
+**Décision** : avant de clore le bloc 2, on a testé (1) si chaque méthode
+tient la charge sur le dataset complet, et (2) si le taux d'accord entre
+les deux méthodes est stable sur plusieurs échantillons ou dépend du
+hasard du tirage.
+
+**Pourquoi** : un résultat mesuré une seule fois (sur un seul échantillon)
+ne prouve rien en soi — ça pourrait être un coup de chance. Un modèle qui
+fonctionne sur 20 000 lignes en test peut très bien planter en production
+sur les données réelles. Ces deux vérifications sont exactement ce que
+prévoyait la roadmap pour le bloc 5 (stabilité, reproductibilité) — autant
+les faire dès maintenant, pendant qu'on code le bloc concerné, plutôt que
+tout reporter à la fin où on n'aurait plus le temps de corriger si un
+problème apparaît.
+
+**Ce qu'on a trouvé** : Isolation Forest scale sans problème (41s sur
+3,09M lignes). LOF plante par manque de mémoire au-delà d'un seuil entre
+2M et 3,09M lignes (sur une machine à ~4 Go de RAM). Le taux d'accord
+entre les deux méthodes (~5,4%) est stable sur 5 tirages indépendants
+(écart-type de seulement 1,4 point).
+
+**Alternative écartée** : ignorer ces vérifications et considérer le bloc
+terminé dès que le code tournait sur l'échantillon de test. Aurait laissé
+un bug de passage à l'échelle non détecté jusqu'au bloc 5, trop tard pour
+le corriger sereinement.
 
 ---
 
