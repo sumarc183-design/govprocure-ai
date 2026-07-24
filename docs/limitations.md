@@ -355,3 +355,30 @@ liste de "quasi-stopwords" métier (retirer "marché(s)", "accord-cadre",
 "prestation(s)" de la requête libre) n'a pas été jugé prioritaire face
 au gain déjà obtenu, mais reste une piste documentée pour une itération
 future si la précision doit encore être améliorée.
+
+## Bloc 4 — Dashboard
+
+**Ce qui est fait** : interface Streamlit à 3 onglets (qualité,
+anomalies, recherche), assemblant les blocs précédents sans nouvelle
+logique métier. Export CSV des résultats de recherche implémenté.
+
+**Ce qui n'est pas fait** : export PDF, initialement prévu dans le
+périmètre du bloc 4. Non implémenté à ce stade — le CSV couvre déjà le
+besoin d'export exploitable, le PDF ajouterait une dépendance
+supplémentaire (génération de rapport formaté) pour un gain jugé
+secondaire vu le temps restant. À ajouter si le temps du bloc 5 le
+permet, sinon documenté comme périmètre réduit assumé.
+
+**Limite de test (même nature qu'au bloc 3)** : l'environnement de
+développement n'a pas de navigateur ni d'accès à huggingface.co pour
+tester le rendu réel de l'interface et l'onglet recherche de bout en
+bout. Vérifié dans cet environnement :
+- le serveur Streamlit démarre sans erreur (`streamlit run`, réponse
+  HTTP 200) ;
+- le module s'importe sans erreur (`test_dashboard.py`) ;
+- la logique sous-jacente (audit qualité, détection d'anomalies) est
+  déjà testée et validée dans les blocs 1 et 2.
+
+**À valider en local** : rendu visuel des 3 onglets, comportement des
+widgets (slider, boutons), onglet recherche avec le vrai modèle
+d'embeddings, et le bouton d'export CSV.

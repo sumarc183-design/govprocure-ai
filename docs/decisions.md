@@ -237,6 +237,47 @@ troisième module a besoin de la même normalisation.
 
 ---
 
+## Bloc 4 — Dashboard
+
+### Une seule page à onglets plutôt que plusieurs pages Streamlit
+
+**Décision** : `src/dashboard/app.py` utilise `st.tabs()` (qualité,
+anomalies, recherche) dans une seule page, plutôt que le système
+multi-pages natif de Streamlit.
+
+**Pourquoi** : cohérent avec la roadmap (bloc 4 = assemblage simple des
+blocs précédents, pas de nouvelle recherche technique). Une seule page
+évite de dupliquer le chargement des données entre plusieurs fichiers de
+page, et suffit largement pour 3 sections.
+
+### Mise en cache systématique du chargement de données
+
+**Décision** : les fonctions de chargement (`charger_donnees_qualite`,
+`charger_donnees_recherche`) sont décorées avec `@st.cache_data`.
+
+**Pourquoi** : Streamlit ré-exécute tout le script à chaque interaction
+(chaque clic, chaque changement de champ). Sans cache, un simple clic
+rechargerait le fichier Parquet de 3M lignes depuis le disque à chaque
+fois — inutilisable en pratique. `@st.cache_data` ne recharge que si les
+paramètres d'entrée changent.
+
+### Limite de test assumée pour ce bloc
+
+**Décision** : le dashboard est testé par un smoke test d'import
+(`test_dashboard.py`), pas par un test du rendu réel de l'interface.
+
+**Pourquoi** : tester le rendu visuel réel d'une app Streamlit nécessite
+un navigateur et un vrai contexte d'exécution, hors périmètre raisonnable
+de pytest pour ce projet. Le smoke test attrape déjà la plupart des
+erreurs bloquantes (import cassé, erreur de syntaxe, dépendance
+manquante) avant même de lancer l'app. Le test complet de l'interface
+(rendu, clics, onglet recherche avec le vrai modèle d'embeddings) reste
+une vérification manuelle, à faire en local — cohérent avec la même
+limite déjà rencontrée au bloc 3 (accès réseau restreint dans
+l'environnement de développement).
+
+---
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
