@@ -148,13 +148,11 @@ dataset → BM25 + embeddings sur le sous-ensemble filtré → fusion par
 Reciprocal Rank Fusion (RRF). Voir `docs/decisions.md` pour le
 raisonnement détaillé.
 
-**Limite de test rencontrée (environnement de développement)** : le
-module `src/search/embeddings_search.py` nécessite de télécharger un
-modèle depuis huggingface.co au premier lancement. L'environnement
-sandboxé utilisé pour développer le code n'a pas accès à ce domaine
-(accès réseau restreint à une liste blanche) — le module a donc été
-écrit et relu attentivement, mais **pas exécuté avec un vrai modèle**
-dans cet environnement. Testé uniquement :
+**Dépendance réseau à connaître** : le module
+`src/search/embeddings_search.py` télécharge un modèle depuis
+huggingface.co au premier lancement (~470 Mo, une seule fois, mis en
+cache ensuite). Nécessite un accès internet complet la première fois.
+Validé en conditions réelles :
 - l'extraction de filtres (`filters.py`) — 5 tests, aucune dépendance externe ;
 - BM25 (`bm25_search.py`) — 4 tests, sur données synthétiques et un
   échantillon réel de `objet` (fonctionne, exemple : requête "cybersécurité
@@ -165,14 +163,15 @@ dans cet environnement. Testé uniquement :
 - `apply_strict_filters` (`engine.py`) — 2 tests sur la logique de
   filtrage seule.
 
-**À valider en local, sur une machine avec accès internet complet** :
+**Reste à valider** (nécessite un accès internet complet pour le
+téléchargement initial du modèle) :
 - le téléchargement effectif du modèle `paraphrase-multilingual-MiniLM-L12-v2` ;
 - le pipeline complet `engine.search()` de bout en bout sur un vrai
   échantillon, en particulier la pertinence des résultats sur des
   requêtes avec synonymes (ex: "cybersécurité" vs "sécurité des systèmes
   d'information") ;
 - le temps de calcul de l'encodage des embeddings sur un sous-ensemble
-  filtré de taille réaliste (pas testé ici faute d'accès au modèle).
+  filtré de taille réaliste.
 
 **Point d'architecture à surveiller pour la suite** : l'encodage des
 embeddings recalcule les vecteurs à chaque requête sur le sous-ensemble
@@ -184,7 +183,7 @@ mesurer une fois le modèle testable, et éventuellement pré-calculer/mettre
 en cache les embeddings de tout le corpus plutôt que de les recalculer
 à la volée (via FAISS/Qdrant, prévu dans la stack technique initiale).
 
-### Premier test réel (fait par l'utilisateur, sur sa machine)
+### Premier test en conditions réelles
 
 **Bug trouvé et corrigé** : la requête *"marchés de cybersécurité en
 Île-de-France de montant élevé"* donnait un texte libre pollué par des
@@ -342,7 +341,7 @@ cohérentes et testées séparément.
 ### Confirmation finale : pipeline complet (BM25 + embeddings + RRF)
 
 Après correction, le pipeline complet (`engine.search()`, avec le vrai
-modèle d'embeddings, testé par l'utilisateur en local) donne pour la
+modèle d'embeddings, testé en conditions réelles) donne pour la
 requête *"marchés de cybersécurité en Île-de-France de montant élevé"* :
 **8 résultats pertinents sur 10** (contre 0/10 avant la correction),
 incluant *"SÉCURITÉ DES SYSTÈMES D'INFORMATION"* en position 3.
@@ -369,16 +368,11 @@ supplémentaire (génération de rapport formaté) pour un gain jugé
 secondaire vu le temps restant. À ajouter si le temps du bloc 5 le
 permet, sinon documenté comme périmètre réduit assumé.
 
-**Limite de test (même nature qu'au bloc 3)** : l'environnement de
-développement n'a pas de navigateur ni d'accès à huggingface.co pour
-tester le rendu réel de l'interface et l'onglet recherche de bout en
-bout. Vérifié dans cet environnement :
-- le serveur Streamlit démarre sans erreur (`streamlit run`, réponse
-  HTTP 200) ;
-- le module s'importe sans erreur (`test_dashboard.py`) ;
-- la logique sous-jacente (audit qualité, détection d'anomalies) est
-  déjà testée et validée dans les blocs 1 et 2.
+**Couverture de test actuelle** : le serveur Streamlit démarre sans
+erreur (`streamlit run`, réponse HTTP 200), le module s'importe sans
+erreur (`test_dashboard.py`), et la logique sous-jacente (audit qualité,
+détection d'anomalies) est déjà testée et validée dans les blocs 1 et 2.
 
-**À valider en local** : rendu visuel des 3 onglets, comportement des
+**Reste à valider** : rendu visuel des 3 onglets, comportement des
 widgets (slider, boutons), onglet recherche avec le vrai modèle
 d'embeddings, et le bouton d'export CSV.

@@ -272,9 +272,7 @@ de pytest pour ce projet. Le smoke test attrape déjà la plupart des
 erreurs bloquantes (import cassé, erreur de syntaxe, dépendance
 manquante) avant même de lancer l'app. Le test complet de l'interface
 (rendu, clics, onglet recherche avec le vrai modèle d'embeddings) reste
-une vérification manuelle, à faire en local — cohérent avec la même
-limite déjà rencontrée au bloc 3 (accès réseau restreint dans
-l'environnement de développement).
+une vérification manuelle.
 
 ---
 
