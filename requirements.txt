@@ -1,0 +1,6 @@
+pandas
+polars
+numpy
+scikit-learn
+pytest
+requests
