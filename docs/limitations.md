@@ -369,16 +369,83 @@ détection d'anomalies) est déjà testée et validée dans les blocs 1 et 2.
 widgets (slider, boutons), onglet recherche avec le vrai modèle
 d'embeddings, et le bouton d'export CSV.
 
-## Métriques de recherche encore à produire
+## Bloc 5 — Consolidation robustesse
 
-_À compléter au bloc 5_ : Precision@K, Recall@K, NDCG pour évaluer
-objectivement la qualité du classement de recherche (au-delà de
-l'inspection manuelle faite jusqu'ici), et tester la résistance aux
-fautes de frappe/variantes de formulation dans les requêtes.
+### Métriques de recherche : Precision@K et NDCG@K
 
-## Biais et dérive connus
+**Méthodologie et limite assumée** : en l'absence d'annotation humaine,
+la vérité terrain est construite par mots-clés (`src/search/evaluation.py`)
+— un marché est jugé "pertinent" pour une requête de test s'il contient
+l'un des mots-clés associés dans son `objet`. Limite reconnue : cette
+approche avantage mécaniquement BM25 (basé sur les mots-clés) par
+rapport aux embeddings (qui pourraient capter des synonymes non couverts
+par la liste de mots-clés) — les chiffres ci-dessous doivent être lus en
+gardant ce biais méthodologique en tête, pas comme une vérité absolue.
 
-_À compléter au bloc 5_, avec Evidently : comparaison de la distribution
-des données entre différentes périodes (dérive temporelle), et
-recherche de biais géographiques ou sectoriels dans les résultats de
-recherche et de détection d'anomalies.
+**4 requêtes de test**, construites à partir des thèmes explorés
+manuellement au bloc 3 et de vérifications de présence réelle dans le
+corpus (67 à 8 046 marchés pertinents trouvés selon le thème, sur un
+échantillon de 200 000 lignes) : cybersécurité, travaux de voirie,
+restauration scolaire, espaces verts.
+
+**Résultats BM25 seul** (sur un échantillon de 50 000 marchés) :
+
+| Requête | P@5 | P@10 | NDCG@5 | NDCG@10 |
+|---|---|---|---|---|
+| cybersécurité | 1.0 | 0.7 | 1.0 | 1.0 |
+| travaux de voirie | 1.0 | 1.0 | 1.0 | 1.0 |
+| restauration scolaire | 1.0 | 1.0 | 1.0 | 1.0 |
+| espaces verts | 1.0 | 1.0 | 1.0 | 1.0 |
+
+Ces scores élevés confirment concrètement l'impact de la correction du
+bloc 3 (normalisation d'accents + décomposition de mots composés) : avant
+cette correction, la requête cybersécurité obtenait un score BM25 nul
+sur les marchés pertinents (voir plus haut, "Quatrième observation").
+
+**Retour critique reçu et biais méthodologique reconnu** : ces scores
+"trop parfaits" ont légitimement soulevé une objection — la vérité
+terrain avait potentiellement été construite après avoir observé les
+sorties BM25 lors de l'exploration manuelle du bloc 3 (fuite
+méthodologique), sans mesure du nombre total de documents pertinents
+(pas de Recall@K), et sans tester de requêtes reformulées sans
+recouvrement lexical avec les mots-clés de vérité terrain. Les trois
+corrections suivantes ont été apportées suite à cette remarque :
+
+1. **Recall@K ajouté**, avec le nombre de marchés pertinents connu dans
+   le corpus (`n_pertinents_corpus`).
+2. **`REQUETES_TEST_DIFFICILES`** : les 4 mêmes thèmes reformulés sans
+   aucun mot significatif en commun avec les mots-clés de vérité terrain
+   (ex: "protection des systèmes informatiques" au lieu de
+   "cybersécurité"), pour tester spécifiquement l'apport des embeddings
+   sans recoupement lexical possible avec BM25.
+3. **Fuite reconnue explicitement** dans le code (`evaluation.py`) pour
+   le thème cybersécurité : ses mots-clés de vérité terrain ont été
+   choisis après avoir observé les résultats de recherche au bloc 3, pas
+   choisis a priori.
+
+**Résultats BM25 sur les requêtes difficiles** (même échantillon de
+100 000, Recall@K maintenant mesuré) :
+
+| Requête difficile | P@5 | R@5 | NDCG@5 |
+|---|---|---|---|
+| cybersécurité ("protection des systèmes informatiques") | 0.0 | 0.0 | 0.0 |
+| travaux de voirie ("entretien des routes communales") | 0.2 | 0.0 | 0.431 |
+| restauration scolaire ("repas pour les élèves") | 1.0 | 0.008 | 1.0 |
+| espaces verts ("maintenance des parcs municipaux") | 0.0 | 0.0 | 0.0 |
+
+BM25 s'effondre totalement sur 2 des 4 thèmes reformulés (score nul) —
+attendu, puisque aucun mot de la requête ne matche littéralement les
+marchés pertinents. Le thème restauration scolaire reste artificiellement
+élevé : la reformulation choisie ("repas pour les élèves") contient
+encore littéralement le mot-clé de vérité terrain "repas" — fuite
+résiduelle reconnue, pas corrigée (aurait nécessité une reformulation
+encore plus éloignée, ex: remplacer "repas" par un terme n'apparaissant
+dans aucun mot-clé, à améliorer dans une itération future).
+
+**Résultats du pipeline complet (BM25 + embeddings + RRF)** : à
+compléter avec `python -m src.search.run_evaluation` (nécessite le
+téléchargement du modèle d'embeddings). C'est sur les requêtes
+difficiles (particulièrement cybersécurité et espaces verts, où BM25
+seul obtient 0,0) que la valeur ajoutée réelle des embeddings devrait se
+mesurer concrètement — si le pipeline complet fait mieux que 0,0 sur ces
+deux thèmes, c'est une preuve mesurée de leur apport, pas supposée.

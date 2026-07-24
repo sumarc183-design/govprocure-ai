@@ -276,6 +276,36 @@ une vérification manuelle.
 
 ---
 
+---
+
+## Bloc 5 — Consolidation robustesse
+
+### Vérité terrain par mots-clés plutôt qu'annotation humaine
+
+**Décision** : Precision@K et NDCG@K sont calculés contre une vérité
+terrain construite par mots-clés (un marché est "pertinent" s'il contient
+l'un des mots-clés associés à la requête de test), pas contre une
+annotation humaine.
+
+**Pourquoi** : une annotation humaine de pertinence (faire lire des
+centaines de marchés et juger un par un) serait la référence idéale,
+mais hors périmètre raisonnable de temps pour ce projet. La vérité
+terrain par mots-clés est une approximation practicable, vérifiable
+(on peut relire les mots-clés choisis et juger s'ils sont raisonnables),
+et surtout reproductible — elle permet de mesurer objectivement une
+amélioration ou une régression du pipeline dans le temps, ce qui est le
+principal usage recherché ici.
+
+**Limite assumée et documentée** : cette méthode avantage mécaniquement
+BM25 (basé sur la présence de mots) par rapport aux embeddings (qui
+capturent des synonymes non listés dans les mots-clés). Les scores
+Precision@K/NDCG obtenus ne mesurent donc pas la qualité absolue du
+pipeline hybride, seulement sa performance sur un sous-ensemble de cas
+où la pertinence est définissable par mots-clés. Alternative non retenue
+faute de temps : construire un petit jeu de requêtes avec de vrais
+synonymes non couverts par les mots-clés de vérité terrain (ce qui
+avantagerait au contraire les embeddings) pour équilibrer le biais.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
