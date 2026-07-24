@@ -9,7 +9,29 @@ Ce document est mis à jour au fil du projet, bloc par bloc, plutôt qu'écrit e
 
 ## Bloc 1 — Qualité des données
 
-_À compléter._
+**Méthodologie** : score par colonne = 1 - taux de valeurs manquantes,
+pénalisé de 0.05 par type de problème structurel détecté (dates hors plage,
+montants incohérents, catégories mal normalisées, versioning incohérent).
+Score volontairement simple à ce stade ; à pondérer selon l'importance
+métier de chaque variable si besoin (ex: `montant` est plus critique que
+`titulaire_nom` pour la suite du projet).
+
+**Limites connues du score actuel** :
+- Ne détecte pas les incohérences croisées entre colonnes (ex: `dureeMois`
+  incompatible avec les dates de notification/fin).
+- Le seuil de montant "suspect" (1 Md€) est arbitraire — pertinent pour un
+  premier filtrage, mais certains grands marchés d'État peuvent légitimement
+  dépasser ce seuil (à valider avant de les traiter comme anomalies).
+- Le score ne distingue pas une valeur manquante "structurelle" (champ non
+  applicable) d'une vraie donnée absente (ex: `offresRecues` peut être
+  légitimement non renseigné selon le type de procédure).
+
+**Résultats** : voir le tableau détaillé dans
+[data_sources.md](data_sources.md#notes-daudit).
+
+**Prochaine étape** : fonction de nettoyage (normalisation des catégories,
+règles de traitement des montants aberrants) avant utilisation par les
+blocs anomalies et recherche.
 
 ## Bloc 2 — Détection d'anomalies
 
