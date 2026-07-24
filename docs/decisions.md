@@ -126,6 +126,117 @@ le corriger sereinement.
 
 ---
 
+## Bloc 3 — Recherche hybride
+
+### Combiner filtres SQL, BM25 et embeddings plutôt qu'une seule technique
+
+**Décision** : le moteur de recherche combine trois techniques différentes
+plutôt que d'en choisir une seule.
+
+**Pourquoi** : une requête comme *"marchés informatiques de montant élevé
+en Île-de-France, similaires aux prestations de cybersécurité"* mélange
+trois besoins de nature différente :
+- des filtres exacts (région, montant) → une technique de similarité
+  (embeddings) n'a pas de sens ici, on veut une comparaison stricte ;
+- une recherche par mots-clés (BM25) → efficace mais rate les synonymes
+  ("cybersécurité" vs "sécurité des systèmes d'information", aucun mot
+  commun) ;
+- une notion de similarité de sujet (embeddings) → capture les synonymes
+  et reformulations, mais n'a pas de sens pour un filtre numérique strict
+  comme un montant.
+
+**Alternative écartée** : n'utiliser que des embeddings partout (plus
+simple à coder) — écarté parce que les filtres stricts (montant, région)
+doivent rester exacts, pas approximés par une similarité.
+
+### Reciprocal Rank Fusion (RRF) plutôt qu'une moyenne pondérée des scores
+
+**Décision** : la fusion entre le classement BM25 et le classement
+embeddings se fait via RRF (Reciprocal Rank Fusion), pas via une moyenne
+pondérée des scores bruts.
+
+**Pourquoi** : BM25 et la similarité cosinus des embeddings n'ont pas la
+même échelle (BM25 dépend du corpus et de la rareté des mots, la
+similarité cosinus est bornée entre 0 et 1). Une moyenne pondérée
+nécessiterait de normaliser les scores (sensible aux valeurs extrêmes) et
+de choisir des poids arbitraires (pourquoi 50/50 et pas 70/30 ?). RRF
+compare uniquement les **rangs** de chaque méthode, pas les scores bruts —
+ça évite le problème d'échelles incompatibles, et c'est une méthode
+standard (utilisée par exemple par Elasticsearch) plutôt qu'un choix de
+poids inventé.
+
+**Où s'appliquent les filtres stricts** : avant la fusion, pas dedans. Les
+filtres (région, montant, dates) réduisent d'abord le dataset ; BM25 et
+embeddings tournent ensuite uniquement sur ce sous-ensemble déjà filtré,
+puis sont fusionnés par RRF. Un filtre exact n'a pas sa place dans une
+fusion floue.
+
+### Déduplication par marché appliquée aussi dans le bloc recherche
+
+**Décision** : `apply_strict_filters` déduplique par `uid` (garde une
+seule ligne par marché) après application des filtres région/montant,
+avant de construire les index de recherche.
+
+**Pourquoi** : trouvé en testant sur données réelles — un marché en
+cotraitance (plusieurs titulaires, même `uid`, jusqu'à une dizaine de
+lignes identiques pour un même appel d'offres) apparaissait dupliqué à
+l'identique dans les résultats de recherche. C'est le même phénomène
+identifié dans le bloc 1 (`group_by_marche`), mais appliqué ici à un
+nouveau contexte (recherche plutôt qu'audit qualité).
+
+**Leçon générale** : une règle de nettoyage/structuration des données
+établie dans un bloc doit être reconduite dans tous les blocs suivants
+qui manipulent les mêmes données brutes — elle ne se propage pas
+automatiquement d'un module à l'autre. À vérifier systématiquement
+pour le bloc 4 (dashboard) : les données affichées devront aussi être
+dédupliquées au niveau marché.
+
+### Itération d'amélioration BM25 : normalisation d'accents + mots composés
+
+**Contexte** : testé en conditions réelles, la requête "cybersécurité"
+ne remontait aucun résultat pertinent dans le top 10, alors que des
+marchés clairement pertinents existaient (ex: "SÉCURITÉ DES SYSTÈMES
+D'INFORMATION", 150 M€, Île-de-France). Plutôt que d'accepter cette
+limite ou de basculer directement vers une fusion à poids arbitraires
+(voir plus haut, écartée), diagnostic poussé avant de choisir une
+correction.
+
+**Diagnostic en deux temps** :
+1. D'abord suspecté : "cybersécurité" est un mot composé sans overlap
+   de token avec "sécurité" — décomposition de préfixes composés
+   ajoutée (`cyber`, `télé`, etc.). Amélioration mesurée mais modeste
+   (rang 121 → 88).
+2. Cause plus profonde trouvée ensuite : une partie du corpus est écrite
+   en majuscules sans accents (`"SECURITE"` au lieu de `"Sécurité"`).
+   BM25 fait une correspondance exacte de caractères — sans
+   normalisation, ces deux formes ne partagent jamais de token, quel que
+   soit le sens.
+
+**Décision** : normaliser les accents dans le tokenizer BM25 (même
+technique NFKD que `cleaning.py` au bloc 1), en plus de la décomposition
+de préfixes composés.
+
+**Résultat mesuré** : rang du meilleur résultat pertinent passé de
+121/931 à 3/931 — la normalisation d'accents s'est révélée être la
+correction la plus impactante, plus que la décomposition de mots
+composés seule.
+
+**Pourquoi avoir creusé plutôt que d'accepter la limite ou de passer à
+une fusion pondérée directement** : la fusion pondérée aurait masqué le
+symptôme (en donnant plus de poids aux embeddings) sans corriger la
+cause réelle (BM25 aveugle à une simple différence d'accentuation).
+Corriger la cause profite à toutes les requêtes futures contenant des
+mots accentués, pas seulement à ce cas précis de "cybersécurité".
+
+**Alternative encore possible mais non retenue** : centraliser la
+normalisation de texte (accents, casse) dans une fonction unique
+partagée entre `cleaning.py` (bloc 1) et `bm25_search.py` (bloc 3), pour
+éviter la duplication de logique actuelle. Repoussé pour ne pas
+complexifier la structure du projet à ce stade — à reconsidérer si un
+troisième module a besoin de la même normalisation.
+
+---
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique

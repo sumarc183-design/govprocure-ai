@@ -140,3 +140,218 @@ _À compléter : Precision@K, Recall@K, NDCG, résistance aux fautes/variantes d
 ## Biais et dérive connus
 
 _À compléter au fur et à mesure des tests (Evidently, comparaison de périodes)._
+
+## Bloc 3 — Recherche hybride
+
+**Architecture** : filtres stricts (région, montant) → réduction du
+dataset → BM25 + embeddings sur le sous-ensemble filtré → fusion par
+Reciprocal Rank Fusion (RRF). Voir `docs/decisions.md` pour le
+raisonnement détaillé.
+
+**Limite de test rencontrée (environnement de développement)** : le
+module `src/search/embeddings_search.py` nécessite de télécharger un
+modèle depuis huggingface.co au premier lancement. L'environnement
+sandboxé utilisé pour développer le code n'a pas accès à ce domaine
+(accès réseau restreint à une liste blanche) — le module a donc été
+écrit et relu attentivement, mais **pas exécuté avec un vrai modèle**
+dans cet environnement. Testé uniquement :
+- l'extraction de filtres (`filters.py`) — 5 tests, aucune dépendance externe ;
+- BM25 (`bm25_search.py`) — 4 tests, sur données synthétiques et un
+  échantillon réel de `objet` (fonctionne, exemple : requête "cybersécurité
+  systèmes information" retrouve en premier un marché intitulé "Analyse
+  et remédiation des événements de sécurité des systèmes d'information") ;
+- la fusion RRF (`fusion.py`) — 4 tests, logique pure sans dépendance
+  externe ;
+- `apply_strict_filters` (`engine.py`) — 2 tests sur la logique de
+  filtrage seule.
+
+**À valider en local, sur une machine avec accès internet complet** :
+- le téléchargement effectif du modèle `paraphrase-multilingual-MiniLM-L12-v2` ;
+- le pipeline complet `engine.search()` de bout en bout sur un vrai
+  échantillon, en particulier la pertinence des résultats sur des
+  requêtes avec synonymes (ex: "cybersécurité" vs "sécurité des systèmes
+  d'information") ;
+- le temps de calcul de l'encodage des embeddings sur un sous-ensemble
+  filtré de taille réaliste (pas testé ici faute d'accès au modèle).
+
+**Point d'architecture à surveiller pour la suite** : l'encodage des
+embeddings recalcule les vecteurs à chaque requête sur le sous-ensemble
+filtré. Acceptable tant que les filtres stricts réduisent significativement
+le dataset (quelques milliers de lignes), mais si une requête ne filtre
+presque rien (ex: pas de région ni montant précisés), l'encodage pourrait
+devenir coûteux sur un sous-ensemble encore proche des 3M lignes — à
+mesurer une fois le modèle testable, et éventuellement pré-calculer/mettre
+en cache les embeddings de tout le corpus plutôt que de les recalculer
+à la volée (via FAISS/Qdrant, prévu dans la stack technique initiale).
+
+### Premier test réel (fait par l'utilisateur, sur sa machine)
+
+**Bug trouvé et corrigé** : la requête *"marchés de cybersécurité en
+Île-de-France de montant élevé"* donnait un texte libre pollué par des
+mots de liaison orphelins (`'marchés de cybersécurité en de'` au lieu de
+`'marchés de cybersécurité'`), car les mots ("en", "de") entourant la
+région et le montant extraits n'étaient pas nettoyés après extraction.
+Corrigé dans `filters.py` (`_nettoyer_mots_orphelins`), avec test de
+non-régression associé.
+
+**Limite réelle observée, pas un bug** : sur un échantillon de 5 000
+marchés, filtré sur Île-de-France + 90e percentile de montant, seuls
+54 marchés passaient le filtre strict. Vérification manuelle : sur les
+5 000 marchés de l'échantillon, seulement 10 contenaient un terme lié à
+la cybersécurité — et la plupart étaient des **faux positifs dus à un
+homonyme** : le sigle `SSI` désigne le plus souvent, dans ce corpus,
+un **Système de Sécurité Incendie** (bâtiment), pas un Système
+d'Information. Résultat : le sous-ensemble filtré (54 marchés) ne
+contenait probablement aucun vrai marché de cybersécurité, donc BM25
+et les embeddings ne pouvaient renvoyer que "le moins hors-sujet" d'un
+lot déjà non pertinent — pas un défaut du moteur de recherche, mais une
+conséquence directe d'un échantillon de test trop petit.
+
+**Implications** :
+- Refaire le test sur un échantillon plus grand (ou le dataset complet)
+  pour vérifier la pertinence des résultats quand de vrais candidats
+  existent réellement dans le sous-ensemble filtré.
+- L'ambiguïté d'acronymes comme `SSI` est une vraie limite du texte
+  libre en langage administratif français : ni BM25 ni les embeddings
+  ne désambiguïsent un sigle sans contexte suffisant. À garder en tête
+  pour l'interprétation des résultats, pas nécessairement à "corriger"
+  (il n'y a pas de règle générale fiable pour distinguer les deux sens
+  sans context supplémentaire).
+
+### Deuxième test réel, sur 100 000 lignes : résultat pertinent trouvé, et un second bug
+
+**Bon résultat** : avec un échantillon plus grand (100 000 lignes,
+1 086 marchés après filtre strict), le moteur trouve un vrai résultat
+pertinent : *"SÉCURITÉ DES SYSTÈMES D'INFORMATION"* (150 M€) apparaît
+en position 9 sur la requête cybersécurité + Île-de-France + montant
+élevé. Ça valide que le pipeline fonctionne quand assez de candidats
+pertinents existent dans le sous-ensemble filtré.
+
+**Bug trouvé** : plusieurs marchés apparaissaient dupliqués à l'identique
+dans les résultats (un même marché jusqu'à 9 fois). Cause : cotraitance /
+accord-cadre multi-attributaire — un même marché (`uid`) peut avoir
+jusqu'à une dizaine de titulaires, donc autant de lignes dans les
+données brutes (exactement le phénomène documenté dans le bloc 1). Le
+moteur de recherche n'appliquait pas la déduplication par marché avant
+de classer/afficher les résultats, contrairement à l'audit qualité qui
+la gérait déjà (`group_by_marche`).
+
+**Corrigé** : `apply_strict_filters` (dans `engine.py`) déduplique
+maintenant par `uid` après application des filtres région/montant, avant
+de construire les index BM25/embeddings. Testé avec un cas de cotraitance
+synthétique (3 titulaires, même `uid`) : un seul résultat retourné, pas
+trois.
+
+**Leçon methodologique** : une décision prise dans un bloc (bloc 1 :
+dédupliquer par marché) doit être appliquée de façon cohérente dans
+tous les blocs suivants qui manipulent les mêmes données brutes — sinon
+le même problème réapparaît ailleurs sous une autre forme. À vérifier
+aussi dans le bloc 4 (dashboard) le moment venu.
+
+### Troisième observation : limite de BM25 sur les mots composés/synonymes
+
+Après correction de la déduplication, le marché *"SÉCURITÉ DES SYSTÈMES
+D'INFORMATION"* (150 M€, très pertinent pour la requête cybersécurité) a
+disparu du top 10, alors qu'il y était avant. Diagnostic (BM25 isolé,
+sans les embeddings) :
+
+- Le mot "cybersécurité" de la requête ne matche **littéralement aucun**
+  marché du corpus — ils disent tous "sécurité des systèmes
+  d'information", jamais "cybersécurité". Pour BM25 (correspondance
+  exacte de tokens), `cybersécurité` ≠ `sécurité` : score **0,00** pour
+  tous les marchés SSI pertinents (vérifié : rang BM25 seul de 121 à 717
+  sur 931 candidats).
+- Le mot "marchés" de la requête, en revanche, matche presque tous les
+  documents (très fréquent dans ce corpus administratif, faible pouvoir
+  discriminant), ce qui fait remonter en tête des documents répétant
+  souvent "marché(s)" sans rapport avec la cybersécurité.
+- Conséquence sur la fusion RRF : même si les embeddings classent
+  probablement bien les marchés SSI (similarité sémantique réelle avec
+  "cybersécurité"), un très mauvais rang côté BM25 peut suffire à faire
+  sortir un résultat pertinent du top 10 final.
+
+**Ce n'est pas un bug, c'est une illustration concrète du problème que
+l'architecture hybride est censée résoudre** — et une limite réelle de
+RRF : un signal très faible sur une méthode n'est pas toujours compensé
+par un signal fort sur l'autre, contrairement à ce qu'on pourrait
+attendre naïvement d'une "moyenne" entre deux avis.
+
+**Pistes d'amélioration identifiées, non implémentées à ce stade**
+(à explorer si le temps du bloc 5 le permet, ou à assumer comme limite
+documentée) :
+- Décomposer les mots composés ("cyber" + "sécurité") ou étendre la
+  requête avec des synonymes avant BM25 — ajouterait de la complexité et
+  nécessiterait un dictionnaire de synonymes métier, non trivial à
+  maintenir.
+- Pondérer différemment les deux méthodes dans la fusion plutôt qu'un
+  RRF à poids égal (ce qui reviendrait à abandonner en partie l'argument
+  initial contre les poids arbitraires — compromis à assumer explicitement
+  si choisi).
+- Augmenter le nombre de candidats retenus par méthode avant fusion
+  (actuellement 200) pour laisser plus de marge à un bon score embeddings
+  de compenser un mauvais rang BM25.
+
+### Quatrième observation et correction majeure : accents et mots composés
+
+Investigation plus poussée du problème précédent (BM25 rang 121-717 pour
+les marchés SSI pertinents). Deux causes identifiées et corrigées dans
+`bm25_search.py` :
+
+**Cause principale (la plus impactante)** : une partie du corpus est
+écrite en majuscules sans accents (ex: `"SECURITE DES SYSTEMES D
+INFORMATION"`, `"AMO SECURITE DES SYSTEMES D INFORMATION"`). Sans
+normalisation, `"sécurité"` (requête, avec accent) et `"securite"`
+(donnée brute, sans accent) sont deux tokens différents pour BM25 —
+score de correspondance nul même sur un mot identique. **C'est le même
+principe que la normalisation de `nature` découverte dans le bloc 1**
+(casse/accents incohérents), mais dans un nouveau module : la leçon
+n'avait pas été réappliquée ici avant ce test.
+
+**Cause secondaire** : "cybersécurité" ne partage aucun token avec
+"sécurité" (mots composés — voir observation précédente). Une petite
+liste de préfixes composés courants (`cyber`, `télé`, `multi`, etc.)
+est maintenant décomposée en préfixe + radical.
+
+**Correction** : `_tokenize` normalise désormais les accents (fonction
+`_normaliser_accents`, même technique NFKD que `cleaning.py`) avant
+tokenisation, en plus de la décomposition de mots composés déjà en place.
+
+**Résultat mesuré** : le meilleur rang BM25 du marché *"SÉCURITÉ DES
+SYSTÈMES D'INFORMATION"* passe de **121/931 à 3/931** — largement dans
+un top 10 utilisable. Plusieurs autres marchés SSI pertinents apparaissent
+également aux rangs 2, 4 et 6 après correction, alors qu'aucun n'était
+visible dans le top 10 avant.
+
+**Tests ajoutés** : `test_tokenize_ignores_accents` et
+`test_tokenize_decomposes_compound_prefix`, non-régression sur les deux
+mécanismes. Un test existant (`test_tokenize_removes_stopwords`) a dû
+être adapté : il vérifiait un token accentué (`"sécurité"`), qui n'est
+plus produit tel quel après la normalisation (devient `"securite"`) —
+changement de comportement volontaire, pas une régression.
+
+**Leçon méthodologique (renforce celle du bloc précédent)** : deux
+leçons du bloc 1 (normalisation casse/accents, déduplication par marché)
+ont dû être réappliquées indépendamment dans le bloc 3, dans deux
+modules différents. Signal clair qu'il faudrait à terme centraliser ces
+normalisations de texte dans une fonction commune partagée entre
+`cleaning.py` et `bm25_search.py`, plutôt que de dupliquer la logique —
+amélioration à considérer si un bloc 6 ou une refactorisation est
+envisagée, non prioritaire tant que les deux implémentations restent
+cohérentes et testées séparément.
+
+### Confirmation finale : pipeline complet (BM25 + embeddings + RRF)
+
+Après correction, le pipeline complet (`engine.search()`, avec le vrai
+modèle d'embeddings, testé par l'utilisateur en local) donne pour la
+requête *"marchés de cybersécurité en Île-de-France de montant élevé"* :
+**8 résultats pertinents sur 10** (contre 0/10 avant la correction),
+incluant *"SÉCURITÉ DES SYSTÈMES D'INFORMATION"* en position 3.
+
+**Limite résiduelle assumée** : 2 résultats sur 10 restent hors-sujet
+(un marché de sécurité physique de carrière, un marché pétrolier) —
+probablement portés par le mot générique "marchés", très peu
+discriminant. Non corrigé plus avant : le rapport coût/bénéfice d'une
+liste de "quasi-stopwords" métier (retirer "marché(s)", "accord-cadre",
+"prestation(s)" de la requête libre) n'a pas été jugé prioritaire face
+au gain déjà obtenu, mais reste une piste documentée pour une itération
+future si la précision doit encore être améliorée.
