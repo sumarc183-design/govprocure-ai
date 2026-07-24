@@ -49,6 +49,7 @@ pytest tests/ -v
 ## Documentation
 
 - [Roadmap et avancement](docs/roadmap.md)
+- [Décisions techniques et pourquoi (ADR)](docs/decisions.md)
 - [Limites et robustesse du système](docs/limitations.md)
 - [Sources de données](docs/data_sources.md)
 
