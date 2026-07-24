@@ -135,14 +135,6 @@ ce dataset, de façon consistante.
 
 ## Bloc 3 — Recherche hybride
 
-_À compléter : Precision@K, Recall@K, NDCG, résistance aux fautes/variantes de requêtes._
-
-## Biais et dérive connus
-
-_À compléter au fur et à mesure des tests (Evidently, comparaison de périodes)._
-
-## Bloc 3 — Recherche hybride
-
 **Architecture** : filtres stricts (région, montant) → réduction du
 dataset → BM25 + embeddings sur le sous-ensemble filtré → fusion par
 Reciprocal Rank Fusion (RRF). Voir `docs/decisions.md` pour le
@@ -376,3 +368,17 @@ détection d'anomalies) est déjà testée et validée dans les blocs 1 et 2.
 **Reste à valider** : rendu visuel des 3 onglets, comportement des
 widgets (slider, boutons), onglet recherche avec le vrai modèle
 d'embeddings, et le bouton d'export CSV.
+
+## Métriques de recherche encore à produire
+
+_À compléter au bloc 5_ : Precision@K, Recall@K, NDCG pour évaluer
+objectivement la qualité du classement de recherche (au-delà de
+l'inspection manuelle faite jusqu'ici), et tester la résistance aux
+fautes de frappe/variantes de formulation dans les requêtes.
+
+## Biais et dérive connus
+
+_À compléter au bloc 5_, avec Evidently : comparaison de la distribution
+des données entre différentes périodes (dérive temporelle), et
+recherche de biais géographiques ou sectoriels dans les résultats de
+recherche et de détection d'anomalies.

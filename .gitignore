@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -22,3 +22,6 @@ data/processed/*
 
 # Env
 .env
+
+# Cache pytest
+.pytest_cache/
