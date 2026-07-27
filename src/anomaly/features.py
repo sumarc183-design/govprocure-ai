@@ -57,13 +57,39 @@ def add_comparable_deviation(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def deduplicate_marches(df: pd.DataFrame) -> pd.DataFrame:
+    """Déduplique par `uid` (garde une seule ligne par marché).
+
+    Correction d'un bug trouvé lors d'une revue externe du projet : le
+    dataset a une granularité (marché × titulaire) — un même marché en
+    cotraitance peut apparaître jusqu'à une dizaine de fois (une ligne par
+    titulaire associé). Sans cette déduplication, ces marchés sont
+    surreprésentés dans l'entraînement des modèles d'anomalie, ce qui peut
+    fausser les voisinages de LOF, le taux d'accord entre les méthodes, et
+    faire apparaître plusieurs fois le même marché dans les alertes.
+
+    Le même principe avait déjà été identifié et corrigé pour le moteur de
+    recherche (bloc 3, `apply_strict_filters`) mais n'avait pas été
+    réappliqué ici avant la détection d'anomalies — erreur reconnue,
+    voir docs/decisions.md.
+    """
+    if "uid" not in df.columns:
+        return df
+    return df.drop_duplicates(subset="uid", keep="first").copy()
+
+
 def build_feature_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Construit la matrice de variables numériques pour les modèles d'anomalie.
 
     Retourne (df_enrichi, liste_des_colonnes_features).
     Les valeurs manquantes dans les features sont imputées par la médiane
     de la colonne (choix simple et documenté ; à raffiner si besoin).
+
+    Déduplique par marché (voir deduplicate_marches) avant tout calcul,
+    pour que les médianes de groupe et l'entraînement des modèles portent
+    sur des marchés uniques, pas sur des lignes (marché × titulaire).
     """
+    df = deduplicate_marches(df)
     df = add_comparable_deviation(df)
 
     feature_cols = [

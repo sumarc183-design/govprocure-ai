@@ -100,3 +100,44 @@ def test_build_feature_matrix_imputes_missing_values():
     })
     df_result, feature_cols = build_feature_matrix(df)
     assert df_result[feature_cols].isna().sum().sum() == 0
+
+
+def test_build_feature_matrix_deduplique_par_marche():
+    """Non-régression : bug trouvé lors d'une revue externe — un marché en
+    cotraitance (plusieurs titulaires, même uid) était compté plusieurs
+    fois dans l'entraînement des modèles d'anomalie, faussant les médianes
+    de groupe et les voisinages LOF. Même principe que la déduplication
+    déjà appliquée au moteur de recherche (bloc 3).
+    """
+    from src.anomaly.features import build_feature_matrix
+
+    df = pd.DataFrame({
+        "uid": ["m1", "m1", "m1", "m2", "m3"],  # m1 en cotraitance, 3 titulaires
+        "titulaire_id": ["t1", "t2", "t3", "t4", "t5"],
+        "montant": [100000.0, 100000.0, 100000.0, 50000.0, 75000.0],
+        "dureeMois": [12.0, 12.0, 12.0, 6.0, 24.0],
+        "codeCPV": ["45000000"] * 5,
+    })
+    df_result, _ = build_feature_matrix(df)
+    assert len(df_result) == 3  # un par marché (m1, m2, m3), pas 5
+    assert set(df_result["uid"]) == {"m1", "m2", "m3"}
+
+
+def test_deduplicate_marches_garde_une_ligne_par_uid():
+    from src.anomaly.features import deduplicate_marches
+
+    df = pd.DataFrame({
+        "uid": ["m1", "m1", "m2"],
+        "montant": [100.0, 100.0, 200.0],
+    })
+    result = deduplicate_marches(df)
+    assert len(result) == 2
+    assert set(result["uid"]) == {"m1", "m2"}
+
+
+def test_deduplicate_marches_sans_colonne_uid_ne_plante_pas():
+    from src.anomaly.features import deduplicate_marches
+
+    df = pd.DataFrame({"montant": [100.0, 200.0]})
+    result = deduplicate_marches(df)
+    assert len(result) == 2  # inchangé, pas d'erreur
