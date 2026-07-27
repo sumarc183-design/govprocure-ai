@@ -1,5 +1,7 @@
 # GovProcure AI
 
+[![Tests](https://github.com/sumarc183-design/govprocure-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/sumarc183-design/govprocure-ai/actions/workflows/tests.yml)
+
 > Une plateforme d'analyse des marchés publics français — qualité des données, détection d'anomalies, recherche hybride en langage naturel — construite sur les 3,14 millions de contrats publiés en open data, avec chaque décision technique et chaque bug documentés dans le code de leur découverte à leur correction.
 
 **[📄 Lire la synthèse finale](docs/synthese_finale.md)** — ce que le projet sait faire, ce qu'il ne sait pas faire, ce qui serait fait différemment en production.
@@ -17,9 +19,7 @@
 
 ## Le projet en images
 
-![Qualité des données](docs/images/dashboard-qualite-donnees.png)
-![Détection d'anomalies](docs/images/dashboard-anomalies-resultats.png)
-![Recherche hybride](docs/images/dashboard-recherche-resultats.png)
+*(Captures d'écran du dashboard — onglets Qualité, Anomalies, Recherche — à ajouter dans `docs/images/` et référencer ici.)*
 
 ## Pourquoi ce projet est différent d'un portfolio classique
 
@@ -54,6 +54,30 @@ source venv/bin/activate  # Windows : venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## Récupérer les données
+
+Le dataset (~200 Mo) n'est pas versionné dans ce repo (voir `.gitignore`) —
+il faut le télécharger séparément avant de lancer le dashboard ou les scripts.
+
+1. **Télécharger le fichier Parquet** directement ici :
+   [`https://www.data.gouv.fr/api/1/datasets/r/11cea8e8-df3e-4ed1-932b-781e2635e432`](https://www.data.gouv.fr/api/1/datasets/r/11cea8e8-df3e-4ed1-932b-781e2635e432)
+   (page du jeu de données : [data.gouv.fr — DECP consolidées, format tabulaire](https://www.data.gouv.fr/datasets/donnees-essentielles-de-la-commande-publique-consolidees-format-tabulaire))
+
+2. **Renommer** le fichier téléchargé en `decp.parquet`
+
+3. **Placer** le fichier dans `data/raw/decp.parquet` (créer le dossier `data/raw/` s'il n'existe pas)
+
+```bash
+mkdir -p data/raw
+# après téléchargement, déplacer/renommer le fichier :
+mv ~/Downloads/*.parquet data/raw/decp.parquet
+```
+
+⚠️ Ce dataset est mis à jour quasi quotidiennement par sa source
+(decp.info) — les chiffres exacts documentés dans `docs/limitations.md`
+peuvent légèrement varier d'un téléchargement à l'autre (nombre de
+lignes, valeurs précises), sans remettre en cause les conclusions.
+
 ## Lancer le dashboard
 
 ```bash
@@ -76,4 +100,10 @@ pytest tests/ -v
 
 ## Stack technique
 
-Python, pandas, Polars, scikit-learn, sentence-transformers, rank_bm25, Streamlit, pytest, GitHub Actions.
+Python, pandas, scikit-learn, sentence-transformers, rank_bm25, Streamlit, pytest, GitHub Actions.
+
+## Licence
+
+Projet personnel réalisé dans le cadre d'une candidature. Tous droits
+réservés — pas de licence open source explicite à ce stade. Les données
+utilisées (DECP, data.gouv.fr) sont sous [Licence Ouverte / Open Licence 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence).
