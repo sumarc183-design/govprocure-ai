@@ -17,7 +17,9 @@
 
 ## Le projet en images
 
-*(Captures d'écran du dashboard — onglets Qualité, Anomalies, Recherche — à ajouter dans `docs/images/` et référencer ici.)*
+![Qualité des données](docs/images/dashboard-qualite-donnees.png)
+![Détection d'anomalies](docs/images/dashboard-anomalies-resultats.png)
+![Recherche hybride](docs/images/dashboard-recherche-resultats.png)
 
 ## Pourquoi ce projet est différent d'un portfolio classique
 
