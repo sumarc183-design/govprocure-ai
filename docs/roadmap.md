@@ -9,7 +9,7 @@ Planning indicatif sur 8 semaines. Chaque bloc intègre ses propres tests de rob
 | 2–3 | Bloc 2 — Détection d'anomalies | ✅ Terminé | Isolation Forest + LOF comparés, tests de stabilité |
 | 4–5.5 | Bloc 3 — Recherche hybride | ✅ Terminé | Moteur SQL + BM25 + embeddings, métriques Precision@K/NDCG |
 | 6 | Bloc 4 — Dashboard | ✅ Terminé | Interface Streamlit fonctionnelle |
-| 7–8 | Bloc 5 — Consolidation robustesse | 🟡 En cours | Rapport de limites, drift, reproductibilité, biais |
+| 7–8 | Bloc 5 — Consolidation robustesse | ✅ Terminé | Rapport de limites, drift, reproductibilité, biais |
 
 Légende statut : 🔲 à faire · 🟡 en cours · ✅ terminé
 
