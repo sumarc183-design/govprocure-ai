@@ -48,6 +48,7 @@ pytest tests/ -v
 
 ## Documentation
 
+- [**Synthèse finale**](docs/synthese_finale.md) — ce que le projet sait/ne sait pas faire, recommandations production
 - [Roadmap et avancement](docs/roadmap.md)
 - [Décisions techniques et pourquoi (ADR)](docs/decisions.md)
 - [Limites et robustesse du système](docs/limitations.md)
