@@ -355,6 +355,48 @@ chargement des données plutôt que réappliquée séparément dans chaque
 module consommateur, réduirait ce risque structurellement plutôt que de
 compter sur la vigilance à chaque nouveau bloc.
 
+### Correction NDCG@K et Precision@K suite à une revue externe
+
+**Bug NDCG** : la version initiale calculait l'IDCG (dénominateur de
+normalisation) à partir du nombre de documents pertinents *trouvés* dans
+le top k (`n_pertinents = sum(pertinences)`), pas du nombre total de
+documents pertinents *existant dans le corpus*. Conséquence : un
+classement qui rate une grande partie des documents pertinents pouvait
+quand même obtenir NDCG=1.0, du moment que les quelques documents
+trouvés étaient bien classés — cas observé concrètement (Precision@10 =
+0,7 avec NDCG@10 = 1,0, incohérent).
+
+**Correction** : `ndcg_at_k` prend maintenant `n_pertinents_corpus` en
+paramètre obligatoire (pas de valeur par défaut, pour empêcher un appel
+qui retomberait silencieusement sur l'ancien calcul biaisé). Le
+classement idéal utilisé pour l'IDCG est désormais
+`min(n_pertinents_corpus, k)` documents pertinents en tête, pas le
+nombre trouvé.
+
+**Effet mesuré** : sur `travaux_voirie_difficile` (corpus contenant 4066
+marchés pertinents, mais un seul trouvé dans le top 5), NDCG@5 passe de
+0,431 (ancien calcul) à 0,146 (corrigé) — une différence significative,
+qui reflète correctement une mauvaise couverture de la recherche plutôt
+que de la masquer.
+
+**Bug Precision@K** : la version initiale divisait par le nombre réel de
+résultats retournés (`len(top_k)`) plutôt que par k systématiquement. Un
+moteur qui ne retourne qu'un seul résultat, même parfaitement pertinent,
+obtenait Precision@10 = 1.0 au lieu de 0.1 — masquant le fait qu'il ne
+retourne presque rien.
+
+**Correction** : `precision_at_k` divise maintenant toujours par k
+(définition standard en recherche d'information), les positions non
+remplies comptant comme non pertinentes.
+
+**Pourquoi ces deux bugs allaient dans le même sens** : les deux
+anciennes implémentations partageaient le même défaut de fond — elles
+évaluaient uniquement "parmi ce qui a été retourné/trouvé, est-ce bien
+classé", sans jamais pénaliser ce qui aurait dû être trouvé mais ne l'a
+pas été. Un rappel de la distinction précision/rappel qu'on connaissait
+en théorie, mais qu'on avait mal transposée dans le code la première
+fois.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique

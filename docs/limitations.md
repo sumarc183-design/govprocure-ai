@@ -446,14 +446,23 @@ corrections suivantes ont été apportées suite à cette remarque :
    choisis a priori.
 
 **Résultats BM25 sur les requêtes difficiles** (même échantillon de
-100 000, Recall@K maintenant mesuré) :
+100 000) — **métriques corrigées** suite à la revue externe (voir
+docs/decisions.md pour le détail des deux bugs corrigés : IDCG mal
+calculé pour NDCG, division par le mauvais dénominateur pour Precision) :
 
-| Requête difficile | P@5 | R@5 | NDCG@5 |
-|---|---|---|---|
-| cybersécurité ("protection des systèmes informatiques") | 0.0 | 0.0 | 0.0 |
-| travaux de voirie ("entretien des routes communales") | 0.2 | 0.0 | 0.431 |
-| restauration scolaire ("repas pour les élèves") | 1.0 | 0.008 | 1.0 |
-| espaces verts ("maintenance des parcs municipaux") | 0.0 | 0.0 | 0.0 |
+| Requête difficile | n_pertinents_corpus | P@5 | R@5 | NDCG@5 |
+|---|---|---|---|---|
+| cybersécurité ("protection des systèmes informatiques") | 38 | 0.0 | 0.0 | 0.0 |
+| travaux de voirie ("entretien des routes communales") | 4066 | 0.2 | 0.0 | 0.146 |
+| restauration scolaire ("repas pour les élèves") | 614 | 1.0 | 0.008 | 1.0 |
+| espaces verts ("maintenance des parcs municipaux") | 1434 | 0.0 | 0.0 | 0.0 |
+
+**Effet concret de la correction NDCG** : pour "travaux de voirie", le
+NDCG@5 passe de **0,431 (ancien calcul, biaisé)** à **0,146 (corrigé)**.
+L'ancien calcul ignorait qu'il existe 4066 marchés pertinents dans le
+corpus et jugeait uniquement si le seul résultat trouvé était bien
+classé — le nouveau calcul pénalise correctement le fait de n'en avoir
+trouvé qu'un seul sur un potentiel de 5 positions pertinentes au top 5.
 
 BM25 s'effondre totalement sur 2 des 4 thèmes reformulés (score nul) —
 attendu, puisque aucun mot de la requête ne matche littéralement les
