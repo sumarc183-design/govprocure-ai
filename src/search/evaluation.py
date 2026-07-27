@@ -44,34 +44,65 @@ def est_pertinent(objet: str, mots_cles: list[str]) -> bool:
 def precision_at_k(objets_retournes: list[str], mots_cles: list[str], k: int) -> float:
     """Proportion de résultats pertinents parmi les k premiers retournés.
 
-    Si moins de k résultats sont retournés, on divise par le nombre réel
-    de résultats (pas par k) pour ne pas pénaliser artificiellement une
-    requête qui a peu de candidats disponibles.
+    Définition standard en recherche d'information : on divise toujours
+    par k, pas par le nombre réel de résultats retournés. Si le moteur ne
+    retourne que 2 résultats pour k=10, les 8 positions manquantes comptent
+    comme non pertinentes (précision pénalisée), plutôt que d'être ignorées.
+
+    Correction suite à une revue externe : la version précédente divisait
+    par len(top_k) (le nombre réel de résultats), ce qui masquait
+    silencieusement les cas où le moteur retourne trop peu de résultats —
+    un moteur qui ne retourne qu'un seul résultat parfaitement pertinent
+    obtenait Precision@10 = 1.0 au lieu de 0.1.
     """
     top_k = objets_retournes[:k]
-    if not top_k:
+    if k == 0:
         return 0.0
     n_pertinents = sum(1 for o in top_k if est_pertinent(o, mots_cles))
-    return n_pertinents / len(top_k)
+    return n_pertinents / k
 
 
-def ndcg_at_k(objets_retournes: list[str], mots_cles: list[str], k: int) -> float:
+def ndcg_at_k(
+    objets_retournes: list[str],
+    mots_cles: list[str],
+    k: int,
+    n_pertinents_corpus: int,
+) -> float:
     """NDCG@K avec pertinence binaire (1 = pertinent, 0 = non pertinent).
 
     DCG : somme des pertinences pondérées par la position (1/log2(rang+1)),
     pour valoriser un résultat pertinent trouvé tôt plus qu'un résultat
     pertinent trouvé tard.
-    IDCG : DCG du classement idéal (tous les résultats pertinents en tête).
-    NDCG = DCG / IDCG, entre 0 et 1. Retourne 0 si aucun résultat n'est
-    pertinent dans le top k (IDCG = 0, évite une division par zéro).
+
+    IDCG : DCG du classement idéal, qui doit tenir compte du nombre TOTAL
+    de documents pertinents existant dans le corpus (n_pertinents_corpus),
+    pas seulement de ceux effectivement trouvés dans le top k. Le
+    classement idéal contient min(n_pertinents_corpus, k) résultats
+    pertinents en tête.
+
+    n_pertinents_corpus est donc un paramètre obligatoire, volontairement
+    sans valeur par défaut : NDCG ne peut pas être calculé correctement
+    sans connaître ce nombre.
+
+    Correction suite à une revue externe : la version précédente calculait
+    l'IDCG à partir du nombre de pertinents *trouvés* dans le top k
+    (n_pertinents = sum(pertinences)), ce qui rendait NDCG=1.0 dès que
+    tous les résultats trouvés étaient bien classés — même si le moteur
+    en avait raté beaucoup d'autres qui existaient dans le corpus. Ça
+    expliquait des cas observés en pratique comme Precision@10=0.7 avec
+    NDCG@10=1.0 (incohérent : un classement qui rate 30% des pertinents
+    ne devrait jamais avoir un NDCG parfait).
+
+    NDCG = DCG / IDCG, entre 0 et 1. Retourne 0 si IDCG = 0 (aucun
+    document pertinent dans le corpus pour cette requête).
     """
     top_k = objets_retournes[:k]
     pertinences = [1 if est_pertinent(o, mots_cles) else 0 for o in top_k]
 
     dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(pertinences))
 
-    n_pertinents = sum(pertinences)
-    idcg = sum(1 / math.log2(i + 2) for i in range(n_pertinents))
+    n_ideal = min(n_pertinents_corpus, k)
+    idcg = sum(1 / math.log2(i + 2) for i in range(n_ideal))
 
     return dcg / idcg if idcg > 0 else 0.0
 
@@ -164,9 +195,8 @@ def evaluer_requete(
     colonne_objet: str = "objet",
     df_corpus: pd.DataFrame | None = None,
 ) -> dict:
-    """Calcule Precision@K, NDCG@K et (si df_corpus fourni) Recall@K pour
-    une requête de test, à partir des résultats déjà retournés par le
-    moteur de recherche.
+    """Calcule Precision@K, et (si df_corpus fourni) Recall@K et NDCG@K,
+    à partir des résultats déjà retournés par le moteur de recherche.
 
     Ne lance pas la recherche elle-même (voir engine.search) — prend en
     entrée le dataframe de résultats déjà classé, pour découpler le calcul
@@ -175,8 +205,11 @@ def evaluer_requete(
 
     df_corpus : dataframe du corpus complet soumis à la recherche (avant
     filtrage/classement), utilisé pour compter le nombre total de marchés
-    pertinents et calculer Recall@K. Optionnel : sans lui, seuls
-    Precision@K et NDCG@K sont calculés.
+    pertinents, calculer Recall@K, et calculer NDCG@K correctement (voir
+    ndcg_at_k). Sans df_corpus, NDCG ne peut pas être calculé correctement
+    (il nécessite de connaître le nombre total de pertinents dans le
+    corpus) — dans ce cas, `ndcg@k` vaut `None` plutôt qu'un chiffre
+    silencieusement biaisé.
     """
     k_values = k_values or [5, 10, 20]
     objets = df_resultats[colonne_objet].astype(str).tolist()
@@ -196,10 +229,11 @@ def evaluer_requete(
         resultat[f"precision@{k}"] = round(
             precision_at_k(objets, requete_test.mots_cles_pertinence, k), 3
         )
-        resultat[f"ndcg@{k}"] = round(
-            ndcg_at_k(objets, requete_test.mots_cles_pertinence, k), 3
-        )
+
         if n_pertinents_corpus is not None:
+            resultat[f"ndcg@{k}"] = round(
+                ndcg_at_k(objets, requete_test.mots_cles_pertinence, k, n_pertinents_corpus), 3
+            )
             if n_pertinents_corpus > 0:
                 n_trouves = sum(
                     1 for o in objets[:k]
@@ -208,5 +242,7 @@ def evaluer_requete(
                 resultat[f"recall@{k}"] = round(n_trouves / n_pertinents_corpus, 3)
             else:
                 resultat[f"recall@{k}"] = None
+        else:
+            resultat[f"ndcg@{k}"] = None
 
     return resultat

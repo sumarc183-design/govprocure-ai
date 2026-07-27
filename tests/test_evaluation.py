@@ -29,22 +29,40 @@ def test_precision_at_k_cas_partiel():
     assert precision_at_k(objets, ["sécurité"], k=3) == pytest.approx(1 / 3)
 
 
-def test_precision_at_k_moins_de_k_resultats():
-    """Si moins de k résultats sont disponibles, on divise par le nombre
-    réel de résultats, pas par k, pour ne pas pénaliser artificiellement.
+def test_precision_at_k_moins_de_k_resultats_divise_par_k():
+    """Correction suite à revue externe : Precision@K doit diviser par k
+    (définition standard), pas par le nombre réel de résultats retournés.
+    Un seul résultat pertinent pour k=10 doit donner 0.1, pas 1.0 —
+    sinon un moteur qui retourne trop peu de résultats est faussement
+    récompensé.
     """
     objets = ["sécurité informatique"]
-    assert precision_at_k(objets, ["sécurité"], k=10) == 1.0
+    assert precision_at_k(objets, ["sécurité"], k=10) == pytest.approx(0.1)
 
 
 def test_precision_at_k_liste_vide():
     assert precision_at_k([], ["sécurité"], k=10) == 0.0
 
 
-def test_ndcg_at_k_classement_ideal():
-    """Tous les résultats pertinents en tête -> NDCG = 1.0 (classement idéal)."""
+def test_ndcg_at_k_classement_ideal_avec_corpus_complet():
+    """NDCG = 1.0 seulement si le classement est idéal ET que tous les
+    documents pertinents du corpus sont présents dans le top k.
+    """
     objets = ["sécurité A", "sécurité B", "travaux voirie"]
-    assert ndcg_at_k(objets, ["sécurité"], k=3) == pytest.approx(1.0)
+    # 2 pertinents trouvés, et le corpus n'en contient que 2 au total -> idéal
+    assert ndcg_at_k(objets, ["sécurité"], k=3, n_pertinents_corpus=2) == pytest.approx(1.0)
+
+
+def test_ndcg_at_k_penalise_documents_pertinents_manques():
+    """Correction suite à revue externe : si le corpus contient plus de
+    documents pertinents que ceux trouvés dans le top k, NDCG doit être
+    strictement inférieur à 1.0 — reproduit le cas observé en pratique
+    (Precision@10=0.7 avec NDCG@10=1.0, incohérent avec l'ancien calcul).
+    """
+    objets = ["sécurité A", "sécurité B", "travaux voirie"]
+    # 2 pertinents trouvés, mais le corpus en contient 10 au total -> pénalisé
+    ndcg = ndcg_at_k(objets, ["sécurité"], k=3, n_pertinents_corpus=10)
+    assert ndcg < 1.0
 
 
 def test_ndcg_at_k_classement_inverse_penalise():
@@ -53,15 +71,15 @@ def test_ndcg_at_k_classement_inverse_penalise():
     """
     ideal = ["sécurité A", "sécurité B", "travaux voirie", "travaux X"]
     inverse = ["travaux voirie", "travaux X", "sécurité A", "sécurité B"]
-    ndcg_ideal = ndcg_at_k(ideal, ["sécurité"], k=4)
-    ndcg_inverse = ndcg_at_k(inverse, ["sécurité"], k=4)
+    ndcg_ideal = ndcg_at_k(ideal, ["sécurité"], k=4, n_pertinents_corpus=2)
+    ndcg_inverse = ndcg_at_k(inverse, ["sécurité"], k=4, n_pertinents_corpus=2)
     assert ndcg_ideal == pytest.approx(1.0)
     assert ndcg_inverse < ndcg_ideal
 
 
-def test_ndcg_at_k_aucun_pertinent_retourne_zero():
+def test_ndcg_at_k_aucun_pertinent_dans_corpus_retourne_zero():
     objets = ["travaux voirie", "travaux voirie 2"]
-    assert ndcg_at_k(objets, ["sécurité"], k=2) == 0.0
+    assert ndcg_at_k(objets, ["sécurité"], k=2, n_pertinents_corpus=0) == 0.0
 
 
 def test_evaluer_requete_structure_resultat():
@@ -69,7 +87,8 @@ def test_evaluer_requete_structure_resultat():
         nom="test", requete="sécurité", mots_cles_pertinence=["sécurité"]
     )
     df = pd.DataFrame({"objet": ["sécurité A", "travaux voirie"]})
-    resultat = evaluer_requete(df, requete, k_values=[1, 2])
+    df_corpus = pd.DataFrame({"objet": ["sécurité A", "travaux voirie"]})
+    resultat = evaluer_requete(df, requete, k_values=[1, 2], df_corpus=df_corpus)
 
     assert resultat["nom"] == "test"
     assert resultat["n_resultats"] == 2
@@ -77,6 +96,20 @@ def test_evaluer_requete_structure_resultat():
     assert "ndcg@1" in resultat
     assert "precision@2" in resultat
     assert "ndcg@2" in resultat
+
+
+def test_evaluer_requete_ndcg_none_sans_corpus():
+    """Sans df_corpus, NDCG ne peut pas être calculé correctement (il
+    nécessite n_pertinents_corpus) — doit valoir None plutôt qu'un chiffre
+    silencieusement biaisé.
+    """
+    requete = RequeteTest(
+        nom="test", requete="sécurité", mots_cles_pertinence=["sécurité"]
+    )
+    df = pd.DataFrame({"objet": ["sécurité A", "travaux voirie"]})
+    resultat = evaluer_requete(df, requete, k_values=[2])
+    assert resultat["ndcg@2"] is None
+    assert resultat["precision@2"] is not None  # precision reste calculable sans corpus
 
 
 def test_requetes_test_predefinies_non_vides():
@@ -97,9 +130,6 @@ def test_requetes_difficiles_meme_verite_terrain_que_faciles():
     """
     from src.search.evaluation import REQUETES_TEST_DIFFICILES
 
-    # Mots de liaison ignorés dans la comparaison : leur présence commune
-    # (ex: "des") n'est pas un vrai recouvrement lexical pour BM25, qui les
-    # filtre de toute façon comme mots vides.
     mots_vides = {"le", "la", "les", "un", "une", "des", "de", "du", "et", "en"}
 
     assert len(REQUETES_TEST_DIFFICILES) == len(REQUETES_TEST)
