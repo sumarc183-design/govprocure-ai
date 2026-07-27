@@ -397,6 +397,40 @@ pas été. Un rappel de la distinction précision/rappel qu'on connaissait
 en théorie, mais qu'on avait mal transposée dans le code la première
 fois.
 
+### Mesurer le temps de réponse par composant plutôt que de bout en bout uniquement
+
+**Décision** : `src/search/benchmark.py` mesure séparément la
+construction de l'index BM25, la recherche BM25, la construction de
+l'index embeddings, la recherche embeddings, et le pipeline complet —
+pas seulement un temps total.
+
+**Pourquoi** : un temps total ne dit pas où optimiser. Si la
+construction de l'index embeddings domine largement (hypothèse
+attendue, confirmée par les difficultés de lenteur déjà rencontrées),
+la vraie solution en production est de précalculer/mettre en cache les
+embeddings du corpus une fois pour toutes — pas d'essayer d'accélérer la
+recherche elle-même, qui n'est pas le goulot d'étranglement.
+
+### Annotation humaine découplée de l'appel au moteur de recherche
+
+**Décision** : `src/search/annotation.py` prend en entrée des résultats
+de recherche déjà calculés (dict de dataframes), pas une fonction qui
+appelle `engine.search()` elle-même. Un script séparé
+(`run_annotation.py`) fait l'appel réel et génère le fichier CSV.
+
+**Pourquoi** : même principe de découplage que pour `evaluation.py`
+(bloc 5) — la logique de génération du CSV et de comparaison
+mots-clés/humain est ainsi testable sans dépendre du modèle
+d'embeddings, seul le script d'appel final nécessite un accès internet.
+
+**Objectif de cette annotation** : la vérité terrain par mots-clés
+utilisée pour Precision@K/NDCG depuis le début du bloc 5 n'a jamais été
+comparée à un vrai jugement humain — ce module permet de vérifier si
+elle est fiable ou si elle génère des faux positifs/négatifs
+significatifs (ex: le cas SSI = Sécurité Incendie vs Système
+d'Information, déjà découvert au bloc 3, est exactement le genre
+d'erreur qu'une vérité terrain par mots-clés seule ne peut pas éviter).
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique

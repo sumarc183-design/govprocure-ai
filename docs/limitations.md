@@ -611,3 +611,45 @@ une solution magique — elle peut aussi dégrader un résultat correct par
 coïncidence (1 cas), et reste limitée par la qualité du modèle
 d'embeddings choisi sur certains thèmes (1 cas). Ce résultat mesuré et
 nuancé est plus crédible qu'un tableau où tout fonctionnerait parfaitement.
+
+### Temps de réponse
+
+**À compléter avec** `python -m src.search.benchmark` (nécessite le
+modèle d'embeddings déjà téléchargé). Mesure séparément la construction
+des index BM25/embeddings et la recherche elle-même, sur 3 tailles
+d'échantillon (10k, 50k, 100k), pour identifier où se situe le goulot
+d'étranglement réel.
+
+Déjà vérifié (sans embeddings, partie BM25 seule) : construction de
+l'index BM25 sur 931 candidats filtrés = 0,062 s, recherche = 0,005 s —
+négligeable. Hypothèse à confirmer : la construction de l'index
+embeddings devrait dominer très largement le temps total, cohérent avec
+les lenteurs déjà rencontrées lors des évaluations sur de gros
+échantillons non filtrés (voir plus haut, "Problème de performance
+découvert").
+
+### Annotation humaine : la vérité terrain par mots-clés est-elle fiable ?
+
+**À compléter avec** :
+```
+python -m src.search.run_annotation
+```
+puis, après avoir rempli manuellement la colonne `pertinent` (0 ou 1)
+dans `annotation_a_remplir.csv` en lisant chaque `objet` :
+```
+python -m src.search.run_annotation --comparer
+```
+
+Ça donnera, pour chacune des 4 requêtes de test, le taux d'accord entre
+la vérité terrain par mots-clés (utilisée dans toutes les métriques
+Precision@K/NDCG du bloc 5) et un vrai jugement humain, ainsi que le
+détail des désaccords (faux positifs et faux négatifs du mot-clé).
+
+**Ce qu'on cherche à savoir** : est-ce que le biais méthodologique
+reconnu depuis le début du bloc 5 (vérité terrain construite après avoir
+observé BM25, avantage mécanique de BM25 sur les embeddings) se traduit
+concrètement par des faux positifs/négatifs significatifs, ou si
+l'approximation par mots-clés reste globalement fiable malgré tout. Un
+taux d'accord élevé (>90%) validerait a posteriori la méthodologie
+utilisée ; un taux plus faible remettrait en question les chiffres
+Precision@K/NDCG déjà documentés plus haut.
