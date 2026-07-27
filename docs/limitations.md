@@ -480,3 +480,45 @@ difficiles (particulièrement cybersécurité et espaces verts, où BM25
 seul obtient 0,0) que la valeur ajoutée réelle des embeddings devrait se
 mesurer concrètement — si le pipeline complet fait mieux que 0,0 sur ces
 deux thèmes, c'est une preuve mesurée de leur apport, pas supposée.
+
+### Problème de performance découvert : script d'évaluation trop lent
+
+**Constat** : la première version de `run_evaluation.py` utilisait une
+taille d'échantillon unique (100 000) pour les 8 requêtes de test.
+Résultat en pratique : temps d'exécution de l'ordre de 20 à 30 minutes,
+inutilisable pour itérer.
+
+**Cause** : seul le thème "cybersécurité" a un filtre strict (région +
+montant) qui réduit le volume avant le calcul des embeddings (~931
+lignes après filtre). Les 3 autres thèmes ("travaux de voirie",
+"restauration scolaire", "espaces verts") n'ont aucun filtre dans leur
+requête de test — `apply_strict_filters` ne réduit donc rien, et le
+pipeline encode la totalité de l'échantillon (100 000 textes) à chaque
+fois, pour 6 des 8 requêtes évaluées (facile + difficile × 3 thèmes).
+L'encodage de dizaines de milliers de textes en embeddings sur CPU est
+lent — c'est ce qui expliquait la lenteur.
+
+**Correction** : taille d'échantillon différenciée par thème, pas une
+taille unique pour toutes les requêtes. Cybersécurité garde 100 000
+(nécessaire vu sa rareté et son filtre strict, voir plus haut). Les 3
+autres thèmes passent à 15 000, largement suffisant vu leur fréquence
+dans le corpus (92 à 581 marchés pertinents retrouvés à cette taille,
+contre des milliers à 100 000 — proportionnellement cohérent, largement
+assez pour des métriques stables).
+
+**Limite reconnue de cette correction** : les 8 requêtes ne sont plus
+évaluées sur un échantillon strictement identique, ce qui complique
+légèrement la comparabilité brute des scores entre thèmes (une
+différence de taille d'échantillon peut influencer marginalement des
+métriques comme Recall@K). Assumé comme compromis pratique : chaque
+thème reste évalué sur un échantillon suffisamment grand pour être
+représentatif de son propre volume réel dans le corpus, ce qui est plus
+important que d'avoir une taille identique arbitraire pour tous.
+
+**Lien avec la remarque de la revue externe (point 6)** : ce problème de
+lenteur est une illustration concrète de la limite déjà notée sur le
+recalcul des embeddings à chaque recherche (`EmbeddingIndex` réencode
+tout à chaque appel, pas de cache). Une solution plus durable (hors
+périmètre de cette correction rapide) serait de précalculer et stocker
+les embeddings du corpus une fois pour toutes, plutôt que d'ajuster la
+taille d'échantillon au cas par cas.
