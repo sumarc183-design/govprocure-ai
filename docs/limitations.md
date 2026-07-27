@@ -113,9 +113,10 @@ crash.
 
 ### Stabilité / reproductibilité du taux d'accord
 
-Le taux d'accord de 5,3% entre Isolation Forest et LOF (mesuré au départ
-sur un seul tirage) a été revérifié sur 5 échantillons indépendants de
-20 000 marchés chacun (seeds différentes) via
+**Mesure initiale (avant correction de la déduplication par marché,
+voir docs/decisions.md)** : taux d'accord de 5,3% entre Isolation Forest
+et LOF, revérifié sur 5 échantillons indépendants de 20 000 marchés
+chacun (seeds différentes) via
 `src/anomaly/robustness.py::check_agreement_stability`.
 
 | Seed | n anomalies IF | n anomalies LOF | n accord | taux accord |
@@ -126,12 +127,33 @@ sur un seul tirage) a été revérifié sur 5 échantillons indépendants de
 | 42 | 986 | 1000 | 100 | 0,053 |
 | 100 | 999 | 1000 | 82 | 0,043 |
 
-**Moyenne : 5,4% — écart-type : 1,4%**
+Moyenne : 5,4% — écart-type : 1,4%.
 
-**Conclusion** : le faible taux d'accord est **stable et reproductible**,
-pas un artefact du tirage initial. C'est un résultat structurel : les deux
-méthodes détectent des populations d'anomalies globalement différentes sur
-ce dataset, de façon consistante.
+**Mesure après correction** (déduplication par marché appliquée dans
+`build_feature_matrix`, bug trouvé lors d'une revue externe — voir
+docs/decisions.md) :
+
+| Seed | n anomalies IF | n anomalies LOF | n accord | taux accord |
+|---|---|---|---|---|
+| 1 | 969 | 969 | 97 | 0,053 |
+| 2 | 969 | 969 | 79 | 0,042 |
+| 3 | 967 | 967 | 96 | 0,052 |
+| 42 | 969 | 969 | 60 | 0,032 |
+| 100 | 968 | 968 | 86 | 0,046 |
+
+**Moyenne : 4,5% — écart-type : 0,85%**
+
+**Conclusion** : le faible taux d'accord reste **stable et
+reproductible** après correction (écart-type resserré, pas élargi) —
+toujours pas un artefact du tirage. La correction elle-même a un effet
+mesuré modeste sur cette métrique précise (5,4% → 4,5%), parce qu'un
+tirage aléatoire uniforme sur 3M lignes a statistiquement peu de chances
+de piocher plusieurs lignes du même marché en cotraitance. L'effet le
+plus visible de la correction n'est pas ce taux global mais l'absence
+de `uid` dupliqués dans les listes d'anomalies présentées à
+l'utilisateur (vérifié : 10/10 `uid` uniques dans le top 10 après
+correction, contre des répétitions visibles dans le dashboard avant —
+voir capture d'écran discutée lors de la revue externe).
 
 ## Bloc 3 — Recherche hybride
 

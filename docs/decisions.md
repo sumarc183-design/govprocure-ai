@@ -306,6 +306,55 @@ faute de temps : construire un petit jeu de requêtes avec de vrais
 synonymes non couverts par les mots-clés de vérité terrain (ce qui
 avantagerait au contraire les embeddings) pour équilibrer le biais.
 
+### Bug trouvé lors d'une revue externe : anomalies calculées sans déduplication par marché
+
+**Contexte** : une revue externe du projet a signalé que
+`build_feature_matrix` (utilisé par `detect_isolation_forest`,
+`detect_lof`, `compare_methods` et `check_agreement_stability`)
+n'appliquait pas la déduplication par marché, alors que ce principe avait
+déjà été identifié et corrigé au bloc 3 pour le moteur de recherche.
+
+**Pourquoi c'est important** : sans déduplication, un marché en
+cotraitance (jusqu'à une dizaine de titulaires, donc autant de lignes
+identiques) est surreprésenté dans l'entraînement des modèles. Ça peut
+fausser les médianes de groupe (division CPV), les voisinages de LOF, et
+faire apparaître plusieurs fois le même marché dans les alertes — ce
+qu'on avait effectivement observé sans le diagnostiquer sur une capture
+du dashboard (`uid` répétés dans le tableau "Top 10 anomalies").
+
+**Pourquoi ça nous avait échappé** : la leçon "dédupliquer par marché
+avant tout traitement" avait été apprise et documentée au bloc 1
+(`group_by_marche`) et réappliquée au bloc 3 (recherche), mais jamais
+reportée au bloc 2 (anomalies) — exactement le type d'erreur que la
+note méthodologique du bloc 3 avait pourtant anticipée ("à vérifier
+systématiquement pour le bloc 4"), sans qu'on l'étende explicitement au
+bloc 2 après coup.
+
+**Décision de correction** : centraliser la déduplication dans
+`build_feature_matrix` (fonction `deduplicate_marches`, dans
+`features.py`) plutôt que dans chaque fonction appelante. Comme toutes
+les fonctions de détection passent par `build_feature_matrix`, la
+correction s'applique automatiquement partout sans avoir à modifier
+`detection.py`, `robustness.py`, ni le dashboard séparément.
+
+**Résultat mesuré après correction** : le taux d'accord moyen entre
+Isolation Forest et LOF passe de 5,4% à 4,5% (écart-type 1,4% → 0,85%)
+sur les mêmes 5 tirages. Changement réel mais modeste — expliqué par le
+fait qu'un tirage aléatoire uniforme sur l'ensemble du dataset a
+statistiquement peu de chances d'inclure plusieurs lignes du même
+marché en cotraitance. L'impact le plus visible de la correction n'est
+donc pas ce taux d'accord global, mais l'élimination des `uid` dupliqués
+dans les listes d'anomalies présentées (vérifié : 10/10 `uid` uniques
+dans le top 10 après correction, contre des répétitions visibles avant).
+
+**Leçon méthodologique (troisième occurrence du même problème)** : c'est
+la troisième fois qu'une règle de nettoyage établie dans un bloc n'est
+pas systématiquement reportée aux blocs suivants. Signal clair qu'une
+fonction de déduplication centralisée, appliquée une seule fois au
+chargement des données plutôt que réappliquée séparément dans chaque
+module consommateur, réduirait ce risque structurellement plutôt que de
+compter sur la vigilance à chaque nouveau bloc.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
