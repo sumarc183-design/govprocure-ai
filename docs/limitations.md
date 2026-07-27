@@ -614,19 +614,47 @@ nuancé est plus crédible qu'un tableau où tout fonctionnerait parfaitement.
 
 ### Temps de réponse
 
-**À compléter avec** `python -m src.search.benchmark` (nécessite le
-modèle d'embeddings déjà téléchargé). Mesure séparément la construction
-des index BM25/embeddings et la recherche elle-même, sur 3 tailles
-d'échantillon (10k, 50k, 100k), pour identifier où se situe le goulot
-d'étranglement réel.
+Mesuré avec `python -m src.search.benchmark`, sur la requête
+"marchés de cybersécurité en Île-de-France de montant élevé" (avec
+filtre région/montant), à 3 tailles d'échantillon brut :
 
-Déjà vérifié (sans embeddings, partie BM25 seule) : construction de
-l'index BM25 sur 931 candidats filtrés = 0,062 s, recherche = 0,005 s —
-négligeable. Hypothèse à confirmer : la construction de l'index
-embeddings devrait dominer très largement le temps total, cohérent avec
-les lenteurs déjà rencontrées lors des évaluations sur de gros
-échantillons non filtrés (voir plus haut, "Problème de performance
-découvert").
+| Échantillon brut | Candidats après filtre | BM25 (build+search) | Embeddings (build+search) | Pipeline complet |
+|---|---|---|---|---|
+| 10 000 | 105 | 0,009 s | 11,7 s* | 4,0 s* |
+| 50 000 | 483 | 0,027 s | 15,5 s | 18,1 s |
+| 100 000 | 931 | 0,068 s | 27,5 s | 28,9 s |
+
+*Le modèle d'embeddings est mis en cache après son premier chargement
+(voir `_get_model()` dans `embeddings_search.py`) — le premier "Pipeline
+complet" mesuré (4,0 s) est donc plus rapide que le "Construction index
+embeddings" juste au-dessus (11,7 s, qui inclut le chargement initial du
+modèle depuis le disque), puisqu'il réutilise le modèle déjà chargé.
+
+**Conclusion sans ambiguïté** : BM25 est négligeable (moins de 0,1 s dans
+tous les cas). **Les embeddings dominent presque intégralement** le temps
+de réponse, et ce temps croît avec le nombre de candidats à encoder (pas
+avec la taille de l'échantillon brut — la construction du filtre elle-même
+est quasi instantanée).
+
+**Implication directe pour une mise en production** : sur un cas d'usage
+réaliste (~1000 candidats après filtre, comme "Île-de-France + montant
+élevé"), l'utilisateur attend **27 à 29 secondes** pour un résultat.
+C'est largement inacceptable pour une interface interactive (l'attente
+tolérée pour une recherche est généralement de 1 à 3 secondes). Ce
+chiffre confirme et quantifie, pour la première fois avec une vraie
+mesure plutôt qu'une intuition, que **le recalcul des embeddings à
+chaque requête est le principal goulot d'étranglement du projet** — plus
+impactant que n'importe quel autre point de performance déjà discuté
+(scalabilité de LOF, temps de fusion RRF, etc., tous négligeables en
+comparaison).
+
+**Recommandation pour une version production** (déjà évoquée comme piste,
+confirmée prioritaire par cette mesure) : précalculer et stocker les
+embeddings de l'ensemble du corpus une seule fois (via FAISS ou Qdrant,
+prévus dans la stack technique initiale), plutôt que de les recalculer à
+la volée à chaque recherche. Ça transformerait le temps de réponse d'une
+recherche de ~30 secondes à probablement moins d'une seconde (simple
+recherche de similarité dans un index déjà construit, sans ré-encodage).
 
 ### Annotation humaine : la vérité terrain par mots-clés est-elle fiable ?
 
@@ -653,3 +681,60 @@ l'approximation par mots-clés reste globalement fiable malgré tout. Un
 taux d'accord élevé (>90%) validerait a posteriori la méthodologie
 utilisée ; un taux plus faible remettrait en question les chiffres
 Precision@K/NDCG déjà documentés plus haut.
+
+**Même bug de lenteur reproduit une deuxième fois** : la première
+version de `run_annotation.py` utilisait un échantillon unique de 50 000
+pour les 4 requêtes, reproduisant exactement le problème déjà rencontré
+et corrigé dans `run_evaluation.py` (seule "cybersécurité" a un filtre
+qui réduit le volume ; les 3 autres thèmes forcent l'encodage de
+l'échantillon entier). Corrigé de la même façon : taille d'échantillon
+différenciée par thème, réduite à 5 000 pour les thèmes sans filtre
+(largement suffisant, l'annotation ne nécessite que 8 exemples variés
+par requête, pas une mesure statistique sur un grand volume). Leçon
+retenue : ce genre de correction ponctuelle (un seul script corrigé)
+ne suffit pas à empêcher la récidive dans un script similaire écrit
+plus tard — un signal de plus en faveur d'une fonction utilitaire
+commune de "sélection de taille d'échantillon adaptée au filtre d'une
+requête", plutôt que de la recopier à chaque nouveau script.
+
+### Résultats de l'annotation humaine : la vérité terrain par mots-clés est fiable
+
+**Méthodologie de cette annotation, à préciser honnêtement** : les 32
+lignes (8 par thème) ont été jugées pertinentes ou non en lisant chaque
+`objet`, jugements proposés puis relus et validés. Ce n'est pas une
+annotation aveugle réalisée par une tierce personne indépendante du
+projet — une vraie validation externe aurait plus de poids
+méthodologique — mais ça reste un jugement de lecture explicite,
+justifié ligne par ligne, plus rigoureux qu'une simple confirmation
+sans y regarder.
+
+**Résultat** :
+
+| Requête | Taux d'accord (mots-clés vs jugement) | Faux positifs mots-clés | Faux négatifs |
+|---|---|---|---|
+| cybersécurité | 100% | 0 | 0 |
+| travaux de voirie | 100% | 0 | 0 |
+| restauration scolaire | 87,5% | 1 | 0 |
+| espaces verts | 100% | 0 | 0 |
+
+**Interprétation** : la vérité terrain par mots-clés se révèle globalement
+fiable (3 thèmes sur 4 à 100% d'accord). Le seul écart trouvé : le marché
+*"Gros œuvre — Restructuration de la cantine scolaire"* est classé
+pertinent par les mots-clés (il contient "cantine") mais correspond en
+réalité à des **travaux de bâtiment**, pas à un service de restauration
+scolaire — un faux positif logique, dans la même famille que le cas SSI
+(Sécurité Incendie vs Système d'Information) déjà rencontré au bloc 3 :
+un mot-clé isolé ("cantine", "SSI") peut désigner un objet physique
+(le bâtiment, l'équipement) plutôt que le service qu'on cherche
+réellement.
+
+**Ce que ça valide, et ce que ça ne valide pas** : ce résultat confirme
+que la vérité terrain par mots-clés n'introduit pas de biais massif sur
+ces 4 thèmes précis — les chiffres Precision@K/NDCG documentés plus haut
+restent globalement crédibles. Ça ne prouve pas que la méthode serait
+aussi fiable sur d'autres thèmes non testés, ni que le biais de fuite
+déjà reconnu (mots-clés cybersécurité choisis après avoir vu les
+résultats BM25 du bloc 3) soit annulé — cette annotation valide la
+*précision* de la vérité terrain (peu de faux positifs), pas
+l'absence de biais dans sa *construction* (comment les mots-clés ont
+été choisis).
