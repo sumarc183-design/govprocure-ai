@@ -560,3 +560,54 @@ connue et documentée sur `restauration_scolaire_difficile` ("repas pour
 les élèves" contenait littéralement le mot-clé "repas") — corrigée du
 même coup avec une nouvelle formulation ("nourriture destinée aux
 enfants dans les établissements primaires").
+
+### Résultats finaux : impact réel des embeddings sur les requêtes difficiles
+
+Une fois les deux incohérences ci-dessus corrigées, comparaison propre
+entre BM25 seul et le pipeline complet (BM25+embeddings+RRF) sur les 4
+requêtes difficiles (sans recouvrement lexical avec la vérité terrain) :
+
+| Thème difficile | BM25 seul (P@5) | Pipeline complet (P@5) | NDCG@5 pipeline |
+|---|---|---|---|
+| cybersécurité | 0.0 | **0.4** | 0.637 |
+| travaux de voirie | 0.6 | **0.2** | 0.214 |
+| restauration scolaire | 0.0 | **0.6** | 0.655 |
+| espaces verts | 0.0 | **0.0** | 0.0 |
+
+**Résultat nuancé, pas une victoire uniforme des embeddings** :
+
+- **2 succès nets** (cybersécurité, restauration scolaire) : le pipeline
+  complet retrouve des résultats pertinents là où BM25 seul échouait
+  totalement (score nul). C'est la preuve concrète de la valeur ajoutée
+  des embeddings sur des reformulations sans recouvrement lexical —
+  exactement l'hypothèse de départ de l'architecture hybride.
+
+- **1 régression surprenante** (travaux de voirie) : le pipeline complet
+  fait **moins bien** que BM25 seul (0.2 contre 0.6). Explication
+  probable : BM25 seul profitait d'un léger recouvrement fortuit
+  ("routes communales" partage des sous-chaînes avec des termes du
+  corpus malgré la reformulation), obtenant un score correct par
+  coïncidence. La fusion RRF, en intégrant ensuite le classement des
+  embeddings (possiblement moins bon sur cette requête précise), a dilué
+  ce signal BM25 qui était en fait de bonne qualité. C'est une
+  illustration concrète de la limite de RRF déjà documentée au bloc 3 :
+  un signal fort sur une méthode n'est pas toujours préservé quand il
+  est fusionné à parts égales avec un signal plus faible sur l'autre.
+
+- **1 échec persistant** (espaces verts) : ni BM25 ni le pipeline complet
+  ne trouvent de résultat pertinent (0.0 des deux côtés). Ça suggère que
+  le modèle d'embeddings utilisé
+  (`paraphrase-multilingual-MiniLM-L12-v2`, choisi pour sa légèreté CPU)
+  ne capture pas suffisamment bien la proximité sémantique entre
+  "maintenance des parcs municipaux" et "espaces verts"/"tonte"/"élagage"
+  pour ce cas précis — limite du modèle choisi, pas de l'architecture en
+  elle-même. Un modèle plus grand (mais plus lourd) pourrait faire
+  mieux, à tester si le temps le permet.
+
+**Conclusion honnête pour le README/la synthèse finale** : l'architecture
+hybride apporte une valeur mesurable et réelle (2 cas sur 4 où elle
+transforme un échec total en résultat exploitable), mais elle n'est pas
+une solution magique — elle peut aussi dégrader un résultat correct par
+coïncidence (1 cas), et reste limitée par la qualité du modèle
+d'embeddings choisi sur certains thèmes (1 cas). Ce résultat mesuré et
+nuancé est plus crédible qu'un tableau où tout fonctionnerait parfaitement.
