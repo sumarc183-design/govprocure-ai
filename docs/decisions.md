@@ -431,6 +431,28 @@ significatifs (ex: le cas SSI = Sécurité Incendie vs Système
 d'Information, déjà découvert au bloc 3, est exactement le genre
 d'erreur qu'une vérité terrain par mots-clés seule ne peut pas éviter).
 
+### Transparence sur la méthode d'annotation réellement utilisée
+
+**Décision** : documenter explicitement que l'annotation des 32 lignes
+n'a pas été réalisée par une tierce personne indépendante du projet,
+mais par une lecture ligne par ligne, jugements proposés puis validés.
+
+**Pourquoi le dire clairement plutôt que de présenter ça comme une
+"vraie" annotation humaine indépendante** : la valeur méthodologique
+d'une annotation dépend de qui juge et comment. Prétendre à une
+indépendance qui n'existe pas serait plus trompeur que d'assumer la
+limite. Ceci dit, la méthode reste plus rigoureuse qu'une simple
+confirmation sans lecture : chaque ligne a été jugée individuellement
+avec une justification explicite (voir la conversation du projet), pas
+une approbation en bloc.
+
+**Résultat obtenu malgré cette limite** : 3 thèmes sur 4 à 100% d'accord
+avec la vérité terrain par mots-clés, un seul écart trouvé (faux positif
+logique sur "cantine" désignant un bâtiment plutôt qu'un service, même
+famille que le cas SSI du bloc 3). Ça apporte un premier niveau de
+validation, même partiel, plutôt que de laisser cette question
+complètement ouverte comme au début du bloc 5.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
