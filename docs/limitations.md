@@ -522,3 +522,41 @@ tout à chaque appel, pas de cache). Une solution plus durable (hors
 périmètre de cette correction rapide) serait de précalculer et stocker
 les embeddings du corpus une fois pour toutes, plutôt que d'ajuster la
 taille d'échantillon au cas par cas.
+
+### Incohérence trouvée en comparant facile vs difficile pour cybersécurité
+
+**Constat** : en comparant les deux tableaux "Pipeline complet", le
+thème cybersécurité affichait `n_pertinents_corpus = 4` en version
+facile mais `37` en version difficile — alors que les deux versions du
+même thème devraient normalement filtrer sur le même sous-ensemble
+(Île-de-France + montant élevé).
+
+**Cause** : la requête difficile initiale ("protection des systèmes
+informatiques") avait supprimé non seulement le vocabulaire thématique,
+mais aussi tout le filtre géographique/montant présent dans la version
+facile ("marchés de cybersécurité **en Île-de-France de montant
+élevé**"). Sans ce filtre, `apply_strict_filters` ne réduisait rien, et
+la requête difficile était évaluée sur l'intégralité de l'échantillon
+(100 000 lignes non filtrées) plutôt que sur les 931 candidats filtrés
+de la version facile — mélangeant involontairement deux facteurs de
+difficulté différents (absence de recouvrement lexical **et** absence
+de filtre) au lieu d'isoler uniquement le premier, qui était l'objectif
+de ce jeu de requêtes.
+
+**Correction** : la requête difficile conserve maintenant le même filtre
+que la version facile — seul le vocabulaire thématique change
+("protection des systèmes informatiques **en Île-de-France de montant
+élevé**"). Vérifié : les deux versions donnent maintenant le même
+nombre de candidats après filtre (931).
+
+**Bonus, trouvé au passage** : le test de non-régression associé
+(`test_requetes_difficiles_meme_verite_terrain_que_faciles`) a été
+corrigé pour vérifier la bonne propriété (aucun mot-clé de vérité
+terrain ne doit apparaître littéralement dans la requête difficile),
+plutôt que l'ancienne vérification trop large (aucun mot en commun entre
+facile et difficile, ce qui aurait empêché de partager volontairement le
+même filtre). Ce test plus précis a immédiatement révélé la fuite déjà
+connue et documentée sur `restauration_scolaire_difficile` ("repas pour
+les élèves" contenait littéralement le mot-clé "repas") — corrigée du
+même coup avec une nouvelle formulation ("nourriture destinée aux
+enfants dans les établissements primaires").

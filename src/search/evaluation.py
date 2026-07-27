@@ -167,7 +167,16 @@ REQUETES_TEST = [
 REQUETES_TEST_DIFFICILES = [
     RequeteTest(
         nom="cybersecurite_difficile",
-        requete="protection des systèmes informatiques",
+        # Garde le même filtre (région + montant) que la version facile —
+        # bug corrigé : la première reformulation ("protection des
+        # systèmes informatiques") avait supprimé aussi le filtre
+        # géographique/montant, pas seulement le vocabulaire thématique,
+        # ce qui mélangeait deux facteurs de difficulté différents
+        # (absence de recouvrement lexical ET absence de filtre) au lieu
+        # d'isoler uniquement le premier. Trouvé en comparant n_pertinents
+        # entre facile (4, après filtre) et difficile (37, sans filtre)
+        # pour un même thème censé être filtré de façon identique.
+        requete="protection des systèmes informatiques en Île-de-France de montant élevé",
         mots_cles_pertinence=REQUETES_TEST[0].mots_cles_pertinence,
     ),
     RequeteTest(
@@ -177,7 +186,12 @@ REQUETES_TEST_DIFFICILES = [
     ),
     RequeteTest(
         nom="restauration_scolaire_difficile",
-        requete="repas pour les élèves",
+        # Reformulé pour éviter toute fuite lexicale avec les mots-clés de
+        # vérité terrain ("repas", "cantine", "restauration scolaire") —
+        # la première version ("repas pour les élèves") contenait
+        # littéralement "repas", ce qui faussait artificiellement le score
+        # de BM25 seul sur cette requête soi-disant "difficile".
+        requete="nourriture destinée aux enfants dans les établissements primaires",
         mots_cles_pertinence=REQUETES_TEST[2].mots_cles_pertinence,
     ),
     RequeteTest(

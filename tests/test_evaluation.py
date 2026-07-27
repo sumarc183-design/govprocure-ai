@@ -124,23 +124,28 @@ def test_requetes_test_predefinies_non_vides():
 
 def test_requetes_difficiles_meme_verite_terrain_que_faciles():
     """Les requêtes difficiles doivent partager la vérité terrain (mots-clés)
-    de leur équivalent facile, mais avec un texte de requête totalement
-    différent (aucun mot significatif en commun), pour tester spécifiquement
-    l'apport des embeddings sans recouvrement lexical.
-    """
-    from src.search.evaluation import REQUETES_TEST_DIFFICILES
+    de leur équivalent facile, mais leur texte ne doit contenir aucun des
+    mots-clés de vérité terrain — c'est la propriété qui compte pour tester
+    l'apport des embeddings sans recouvrement lexical possible avec BM25.
 
-    mots_vides = {"le", "la", "les", "un", "une", "des", "de", "du", "et", "en"}
+    Ne compare PAS le texte facile au texte difficile directement : les
+    deux peuvent légitimement partager le même filtre (région/montant,
+    ex: "en Île-de-France de montant élevé") — seul le vocabulaire
+    thématique doit changer. Bug corrigé : la première version de ce test
+    comparait les deux textes entiers, ce qui aurait empêché de garder un
+    filtre commun volontairement identique entre facile et difficile.
+    """
+    from src.search.evaluation import REQUETES_TEST_DIFFICILES, _normaliser
 
     assert len(REQUETES_TEST_DIFFICILES) == len(REQUETES_TEST)
     for facile, difficile in zip(REQUETES_TEST, REQUETES_TEST_DIFFICILES):
         assert facile.mots_cles_pertinence == difficile.mots_cles_pertinence
-        mots_facile = set(facile.requete.lower().split()) - mots_vides
-        mots_difficile = set(difficile.requete.lower().split()) - mots_vides
-        assert mots_facile.isdisjoint(mots_difficile), (
-            f"Recouvrement lexical inattendu entre '{facile.requete}' "
-            f"et '{difficile.requete}'"
-        )
+        requete_difficile_norm = _normaliser(difficile.requete)
+        for mot_cle in difficile.mots_cles_pertinence:
+            assert _normaliser(mot_cle) not in requete_difficile_norm, (
+                f"Le mot-clé de vérité terrain '{mot_cle}' apparaît "
+                f"littéralement dans la requête difficile '{difficile.requete}'"
+            )
 
 
 def test_evaluer_requete_calcule_recall_si_corpus_fourni():
