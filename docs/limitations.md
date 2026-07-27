@@ -44,6 +44,12 @@ la médiane des marchés comparables (même division CPV — 2 premiers
 chiffres du code CPV, ~174 groupes bien peuplés). Voir
 `src/anomaly/features.py`.
 
+> ⚠️ **État historique avant correction** — ce chiffre (5,3%) a été
+> mesuré avant la correction de déduplication par marché (bloc 5). Le
+> résultat final corrigé est **4,5%** — voir la section "Stabilité /
+> reproductibilité du taux d'accord" plus bas pour le détail complet
+> avant/après. Conservé ici tel quel pour l'historique du raisonnement.
+
 **Résultat clé — accord entre les deux méthodes** : seulement **5,3%**
 de recouvrement entre les anomalies détectées par Isolation Forest et
 celles détectées par LOF (contamination fixée à 5% pour les deux).
@@ -177,7 +183,14 @@ Validé en conditions réelles :
 - `apply_strict_filters` (`engine.py`) — 2 tests sur la logique de
   filtrage seule.
 
-**Reste à valider** (nécessite un accès internet complet pour le
+> ⚠️ **État historique** — les points ci-dessous étaient présentés comme
+> "reste à valider" avant l'exécution complète du pipeline. **Tout a
+> depuis été fait** : le modèle a été téléchargé et testé, le pipeline
+> complet a été exécuté de bout en bout sur données réelles, et le temps
+> de calcul a été mesuré précisément. Voir "Confirmation finale" et
+> "Temps de réponse" plus bas pour les résultats définitifs.
+
+~~**Reste à valider**~~ (nécessitait un accès internet complet pour le
 téléchargement initial du modèle) :
 - le téléchargement effectif du modèle `paraphrase-multilingual-MiniLM-L12-v2` ;
 - le pipeline complet `engine.search()` de bout en bout sur un vrai
@@ -382,14 +395,26 @@ supplémentaire (génération de rapport formaté) pour un gain jugé
 secondaire vu le temps restant. À ajouter si le temps du bloc 5 le
 permet, sinon documenté comme périmètre réduit assumé.
 
-**Couverture de test actuelle** : le serveur Streamlit démarre sans
+**Couverture de test automatisée** : le serveur Streamlit démarre sans
 erreur (`streamlit run`, réponse HTTP 200), le module s'importe sans
 erreur (`test_dashboard.py`), et la logique sous-jacente (audit qualité,
 détection d'anomalies) est déjà testée et validée dans les blocs 1 et 2.
 
-**Reste à valider** : rendu visuel des 3 onglets, comportement des
-widgets (slider, boutons), onglet recherche avec le vrai modèle
-d'embeddings, et le bouton d'export CSV.
+> ⚠️ **État historique corrigé** — cette section indiquait initialement
+> "reste à valider" pour le rendu visuel. **C'est fait** : les 3 onglets
+> ont été vérifiés manuellement après toutes les corrections du bloc 5
+> (déduplication anomalies, NDCG/Precision), via export CSV de chaque
+> onglet et captures d'écran (voir README). Résultats confirmés : 10/10
+> `uid` uniques dans le top anomalies (déduplication effective), 20/20
+> résultats uniques dans la recherche, tableau qualité inchangé. Aucune
+> régression détectée.
+
+**Limite persistante, non corrigée** : le test automatisé du dashboard
+reste un simple test d'import (`test_dashboard.py`), pas un test
+fonctionnel réel de rendu ou d'interaction. La vérification faite
+au-dessus est manuelle, pas reproductible automatiquement en CI — à
+améliorer si le projet évolue (ex: tests Selenium/Playwright sur
+l'interface Streamlit).
 
 ## Bloc 5 — Consolidation robustesse
 
@@ -658,7 +683,15 @@ recherche de similarité dans un index déjà construit, sans ré-encodage).
 
 ### Annotation humaine : la vérité terrain par mots-clés est-elle fiable ?
 
-**À compléter avec** :
+> ⚠️ **État historique** — cette section décrit les instructions pour
+> lancer l'annotation, écrites avant de l'avoir fait. **Les résultats
+> réels sont disponibles plus bas**, dans la section "Résultats de
+> l'annotation humaine : la vérité terrain par mots-clés est fiable"
+> (spoiler : 100% d'accord sur 3 thèmes sur 4). Instructions conservées
+> ici pour la reproductibilité (permettent de relancer l'annotation sur
+> de nouveaux exemples si besoin).
+
+**Instructions pour relancer/étendre l'annotation** :
 ```
 python -m src.search.run_annotation
 ```
@@ -681,6 +714,10 @@ l'approximation par mots-clés reste globalement fiable malgré tout. Un
 taux d'accord élevé (>90%) validerait a posteriori la méthodologie
 utilisée ; un taux plus faible remettrait en question les chiffres
 Precision@K/NDCG déjà documentés plus haut.
+
+**Résultat obtenu (voir détail plus bas)** : taux d'accord élevé (100%
+sur 3 thèmes sur 4, 87,5% sur le 4ème) — la méthodologie par mots-clés
+est validée comme globalement fiable sur cet échantillon.
 
 **Même bug de lenteur reproduit une deuxième fois** : la première
 version de `run_annotation.py` utilisait un échantillon unique de 50 000
