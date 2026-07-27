@@ -1,18 +1,31 @@
 # GovProcure AI
 
-Plateforme d'analyse des marchés publics — qualité des données, détection d'anomalies, recherche hybride, tableau de bord d'aide à la décision.
+> Une plateforme d'analyse des marchés publics français — qualité des données, détection d'anomalies, recherche hybride en langage naturel — construite sur les 3,14 millions de contrats publiés en open data, avec chaque décision technique et chaque bug documentés dans le code de leur découverte à leur correction.
 
-Le projet s'appuie sur les données ouvertes de la commande publique (open data) pour :
+**[📄 Lire la synthèse finale](docs/synthese_finale.md)** — ce que le projet sait faire, ce qu'il ne sait pas faire, ce qui serait fait différemment en production.
 
-- **contrôler la qualité des données** (valeurs manquantes, doublons, incohérences, dérive) ;
-- **détecter des opérations atypiques** à examiner (sans jamais qualifier de fraude) ;
-- **rechercher des marchés en langage naturel** via un moteur hybride (SQL + BM25 + embeddings) ;
-- **comparer plusieurs modèles** et documenter leurs limites ;
-- **produire un tableau de bord** d'aide à la décision.
+## En bref
 
-## Statut du projet
+| | |
+|---|---|
+| **Données** | 3,14M marchés publics (data.gouv.fr / decp.info), 1,73M marchés uniques après regroupement |
+| **Qualité** | Score de fiabilité par colonne — 64 408 montants incohérents détectés, catégories normalisées |
+| **Anomalies** | Isolation Forest + LOF comparés, seulement 4,5% d'accord entre les deux — résultat stable et expliqué, pas un bug |
+| **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels |
+| **Robustesse** | 2 bugs méthodologiques trouvés via revue externe et corrigés (déduplication, calcul NDCG), documentés avec preuve avant/après |
+| **Tests** | 69 tests automatisés, CI GitHub Actions |
 
-🚧 Projet en cours de développement — voir [docs/roadmap.md](docs/roadmap.md) pour l'avancement par bloc.
+## Le projet en images
+
+*(Captures d'écran du dashboard — onglets Qualité, Anomalies, Recherche — à ajouter dans `docs/images/` et référencer ici.)*
+
+## Pourquoi ce projet est différent d'un portfolio classique
+
+Ce n'est pas un projet où "tout marche parfaitement". Trois exemples concrets :
+
+- **Un bug trouvé et corrigé en direct** : la fonction de détection d'anomalies ne dédupliquait pas les marchés en cotraitance, faussant le taux d'accord entre modèles et faisant apparaître les mêmes marchés plusieurs fois dans les alertes. Trouvé via une revue externe du code, corrigé, chiffres recalculés avant/après (voir [decisions.md](docs/decisions.md)).
+- **Un calcul de métrique corrigé** : le NDCG@K initial ne pénalisait pas les résultats pertinents manqués (`P@10=0.7` donnait pourtant `NDCG@10=1.0`, incohérent). Corrigé, effet mesuré : `0.431 → 0.146` sur un cas réel.
+- **Un résultat nuancé plutôt qu'idéalisé** : sur 4 requêtes de recherche reformulées sans aucun mot en commun avec la vérité terrain, les embeddings sauvent la mise sur 2 thèmes, dégradent le résultat sur 1, et échouent totalement sur le dernier. Documenté tel quel plutôt que présenté comme une victoire uniforme.
 
 ## Structure du repo
 
@@ -24,11 +37,10 @@ govprocure-ai/
 ├── src/
 │   ├── quality/        # Bloc 1 — contrôle qualité des données
 │   ├── anomaly/        # Bloc 2 — détection d'anomalies
-│   ├── search/         # Bloc 3 — moteur de recherche hybride
+│   ├── search/         # Bloc 3 — moteur de recherche hybride + évaluation
 │   └── dashboard/       # Bloc 4 — interface Streamlit
 ├── tests/              # tests unitaires et de robustesse (pytest)
-├── notebooks/          # exploration et prototypage
-├── docs/               # documentation, roadmap, limites du système
+├── docs/               # documentation, roadmap, décisions, limites
 └── .github/workflows/  # CI (GitHub Actions)
 ```
 
@@ -36,8 +48,14 @@ govprocure-ai/
 
 ```bash
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows : venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+## Lancer le dashboard
+
+```bash
+streamlit run src/dashboard/app.py
 ```
 
 ## Lancer les tests
@@ -46,14 +64,14 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-## Documentation
+## Documentation complète
 
-- [**Synthèse finale**](docs/synthese_finale.md) — ce que le projet sait/ne sait pas faire, recommandations production
-- [Roadmap et avancement](docs/roadmap.md)
-- [Décisions techniques et pourquoi (ADR)](docs/decisions.md)
-- [Limites et robustesse du système](docs/limitations.md)
-- [Sources de données](docs/data_sources.md)
+- [**Synthèse finale**](docs/synthese_finale.md) — vue d'ensemble : ce qui fonctionne, les limites, les recommandations production
+- [Décisions techniques (ADR)](docs/decisions.md) — chaque choix technique, pourquoi, et les alternatives écartées
+- [Limites et résultats détaillés](docs/limitations.md) — tous les chiffres, bugs, et découvertes, bloc par bloc
+- [Roadmap](docs/roadmap.md) — avancement du projet
+- [Sources de données](docs/data_sources.md) — origine et structure du dataset
 
 ## Stack technique
 
-Python, pandas, Polars, SQL, scikit-learn, PyTorch, sentence-transformers, BM25, FAISS/Qdrant, SHAP, Evidently, FastAPI, Streamlit, pytest, GitHub Actions, Docker.
+Python, pandas, Polars, scikit-learn, sentence-transformers, rank_bm25, Streamlit, pytest, GitHub Actions.
