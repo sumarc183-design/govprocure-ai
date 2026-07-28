@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /tmp/files_extract)",
+      "Read(//tmp/**)",
+      "Bash(unzip -o ~/Downloads/files.zip)",
+      "Bash(mkdir -p \"/c/Users/M26MO01/Downloads/py/govprocure-ai/docs/images\")",
+      "Bash(cp /tmp/files_extract/*.png \"/c/Users/M26MO01/Downloads/py/govprocure-ai/docs/images/\")"
+    ]
+  }
+}
