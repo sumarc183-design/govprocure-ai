@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .venv/
 env/
+venv-*/
 
 # Data (ne pas versionner les données brutes/volumineuses)
 data/raw/*
@@ -25,3 +26,8 @@ data/processed/*
 
 # Cache pytest
 .pytest_cache/
+
+# Captures de diagnostic des tests dashboard (artefacts de debug temporaires,
+# régénérés à chaque échec de test_dashboard_functional.py, pas destinés à
+# être versionnés)
+diagnostic_tests_dashboard/

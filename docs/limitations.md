@@ -919,3 +919,69 @@ problème — non tranché, rapporté tel quel plutôt que caché.
 (plus d'itérations, dataset complet) ; analyse plus fine du sous-ensemble
 où le modèle échoue le plus (au-delà du simple constat du biais de
 sélection).
+
+## Pondération RRF : résultat plus nuancé que prévu
+
+Testé sur "travaux de voirie" (requête difficile, 581 marchés pertinents) :
+
+| Configuration | P@5 | P@10 |
+|---|---|---|
+| Poids égal (référence) | 0,2 | 0,2 |
+| BM25 ×3 | 0,2 | **0,5** |
+| Embeddings ×3 | **0,4** | 0,3 |
+
+Favoriser BM25 améliore surtout le top 10 ; favoriser les embeddings
+améliore surtout le top 5 — l'inverse de l'hypothèse de départ (qui
+prévoyait que favoriser BM25 serait la bonne correction dans tous les
+cas). Pas de poids universellement meilleur identifié ; le paramètre
+`poids_fusion` reste optionnel plutôt que de changer le défaut sur la
+base d'un seul thème testé.
+
+**Non fait, pour aller plus loin** : tester sur les 3 autres thèmes pour
+voir si un poids donné généralise.
+
+## Tests fonctionnels du dashboard (Playwright)
+
+**Ce qui est fait** : `tests/test_dashboard_functional.py`, teste
+réellement le rendu via un navigateur headless, au-delà du simple test
+d'import déjà existant.
+
+**Protection CI** : ces tests se sautent automatiquement si
+`data/raw/decp.parquet` est absent (toujours le cas sur la machine CI,
+le fichier n'étant jamais versionné) — pas d'échec en CI, juste un skip
+propre et rapide.
+
+**Résultat final, après 9 tentatives indépendantes de correction (voir
+docs/decisions.md pour le détail complet de chacune : portabilité
+Windows, sélecteurs ARIA, délais progressifs, éléments plutôt que texte,
+attente de disparition du squelette, clic souris OS, isolation
+serveur+page par test, attente de fin de script, changement de version
+Streamlit)** :
+
+| Test | Statut |
+|---|---|
+| Titre de l'app affiché | ✅ Fiable |
+| Les 3 onglets présents | ✅ Fiable |
+| Tableau qualité affiché | ✅ Fiable |
+| Widgets onglet anomalies | ⚠️ `xfail` (limite headless documentée) |
+| Widgets onglet recherche | ⚠️ `xfail` (limite headless documentée) |
+
+**Les 2 derniers tests échouent de façon parfaitement reproductible**,
+y compris après changement de version de Streamlit (1.60.0 → 1.32.0,
+aucun effet — élimine l'hypothèse d'un bug de version spécifique).
+Théorie retenue : les widgets interactifs dépendent d'API de détection
+de visibilité qui se comportent différemment en mode headless qu'avec
+un vrai affichage — cohérent avec le fait que l'onglet actif au
+chargement initial (qualité) fonctionne parfaitement, mais pas ceux
+activés après coup par clic automatisé. **Le dashboard fonctionne
+correctement en usage réel** — validé à de multiples reprises par
+captures d'écran manuelles tout au long de ce projet (voir
+`docs/images/`) — ce n'est donc pas un bug du dashboard, mais une
+limite spécifique à l'automatisation headless.
+
+**Décision assumée** : marquer ces 2 tests `xfail` plutôt que de
+continuer à itérer indéfiniment. 3 tests sur 5 fiables représentent déjà
+un gain réel par rapport au simple test d'import qui existait avant, et
+ce point était explicitement le moins prioritaire des 5 recommandations
+de la synthèse finale — un cas clair où il fallait savoir s'arrêter
+plutôt que de poursuivre un problème à rendement décroissant.

@@ -745,6 +745,130 @@ légitime à rapporter tel quel plutôt qu'à cacher.
 de 50 000), ou tester une grille plus ciblée autour des valeurs par
 défaut plutôt qu'un espace de recherche aussi large.
 
+---
+
+## Pondération RRF : résultat plus nuancé que l'hypothèse de départ
+
+**Hypothèse de départ** : sur "travaux de voirie" (requête difficile),
+BM25 seul avait un score correct par coïncidence lexicale ; la fusion à
+poids égal l'aurait dilué avec un moins bon score embeddings.
+L'hypothèse suggérait de favoriser BM25 pour corriger.
+
+**Résultat empirique** (`compare_weighted_rrf.py`, 581 marchés pertinents
+dans le corpus) :
+
+| Configuration | P@5 | NDCG@5 | P@10 | NDCG@10 |
+|---|---|---|---|---|
+| Poids égal (référence) | 0,2 | 0,214 | 0,2 | 0,217 |
+| BM25 ×3 | 0,2 | 0,214 | **0,5** | **0,42** |
+| Embeddings ×3 | **0,4** | **0,345** | 0,3 | 0,288 |
+
+**L'hypothèse n'était que partiellement confirmée** : favoriser BM25
+améliore bien le résultat, mais surtout sur le top 10 (P@10 : 0,2 → 0,5).
+Favoriser au contraire les **embeddings** améliore le top 5 (P@5 : 0,2 →
+0,4) — l'inverse de ce qu'on attendait initialement. Les deux
+pondérations battent le poids égal, mais à des profondeurs de classement
+différentes.
+
+**Conclusion honnête** : il n'y a pas de poids universellement meilleur
+sur ce cas — le meilleur choix dépend de si on privilégie la précision
+en tête de liste (favoriser embeddings) ou une meilleure couverture sur
+une liste plus longue (favoriser BM25). Pas de solution tranchée à
+adopter comme nouveau défaut ; le paramètre `poids_fusion` reste
+optionnel (`None` par défaut, poids égal) plutôt que de figer un choix
+qui ne serait optimal que pour un cas précis testé sur un seul thème.
+
+**Non fait, pour aller plus loin** : tester la pondération sur les 3
+autres thèmes (pas seulement "travaux de voirie") pour voir si un poids
+donné généralise, ou si l'effet est spécifique à ce cas précis.
+
+---
+
+## Tests fonctionnels du dashboard (Playwright)
+
+**Décision** : ajouter `tests/test_dashboard_functional.py`, qui lance
+réellement le serveur Streamlit et un navigateur headless (Playwright),
+au-delà du simple test d'import déjà existant (`test_dashboard.py`).
+
+**Pourquoi c'était une vraie limite avant** : le test d'import attrape
+les erreurs de syntaxe ou d'import cassé, mais pas les régressions
+visuelles/fonctionnelles. Seule une vérification manuelle comblait ce
+trou jusqu'ici.
+
+**Protections de conception** :
+- `pytest.mark.skipif` si `data/raw/decp.parquet` est absent (toujours
+  le cas en CI, fichier volontairement non versionné) — skip propre et
+  rapide plutôt qu'échec systématique en CI.
+- `pytest.importorskip` + `try/except` si Playwright/Chromium n'est pas
+  installé — même logique de skip propre.
+
+**Investigation complète sur 2 des 5 tests (widgets des onglets
+anomalies/recherche), 9 tentatives indépendantes, chacune avec un
+raisonnement technique distinct** :
+
+1. **Portabilité Windows** : `["streamlit", "run", ...]` échouait sur
+   Windows → corrigé via `sys.executable -m streamlit`.
+2. **Sélecteurs de clic** : `get_by_text` remplacé par `get_by_role("tab", ...)`
+   (structure React Aria de Streamlit), avec repli.
+3. **Délais progressifs** : de 10s à 120s selon les étapes — les imports
+   `sentence-transformers`/`torch` au niveau module peuvent être lents.
+4. **Vérifier les éléments plutôt que le texte** : `[data-testid=...]`
+   plutôt que du texte, au cas où le texte ne soit pas dans le DOM
+   cherchable (tableaux virtualisés sur canvas, confirmé pour l'onglet
+   qualité).
+5. **Attendre la disparition du squelette** (`stSkeleton`, trouvé en
+   inspectant le HTML brut) plutôt que l'apparition du widget final.
+6. **Clic souris brut au niveau OS** (`page.mouse.click` aux coordonnées)
+   plutôt que `locator.click()`, pour simuler une vraie interaction
+   matérielle.
+7. **Isolation totale serveur+page par test** (port TCP dynamique,
+   fixtures `function`-scoped) — éliminait toute possibilité de
+   contamination d'état entre tests.
+8. **Attente de fin d'exécution du script complet** avant de cliquer sur
+   un autre onglet — découverte que Streamlit exécute tout son script
+   Python dans l'ordre en une seule passe (titre → audit qualité →
+   onglets suivants), et qu'un clic trop précoce bascule sur un panneau
+   dont le contenu n'a simplement pas encore été généré. Cette piste a
+   corrigé le symptôme "panneau totalement vide" (plus de caption du
+   tout) en "caption visible mais widget en squelette" — un vrai
+   progrès partiel, mais pas une résolution complète.
+9. **Changement de version de Streamlit** (1.60.0 → 1.32.0, testé
+   explicitement pour écarter l'hypothèse d'une refonte trop récente de
+   l'interface — identifiants React Aria observés dans le HTML,
+   suggérant un changement d'architecture frontend récent) : **aucun
+   effet**, symptôme identique bit pour bit sur les deux versions.
+   Élimine définitivement l'hypothèse "bug de version".
+
+**Résultat final** : 3 tests sur 5 passent de façon fiable (titre,
+présence des 3 onglets, tableau qualité). Les 2 tests sur les widgets
+des onglets anomalies/recherche échouent de façon parfaitement
+reproductible et documentée, marqués `@pytest.mark.xfail` plutôt que
+supprimés ou laissés en échec silencieux.
+
+**Théorie retenue pour expliquer le symptôme** (non vérifiée
+empiriquement plus loin, faute de temps) : les widgets interactifs
+Streamlit dépendent probablement d'API de détection de visibilité
+(dans l'esprit d'`IntersectionObserver`) pour décider quand
+s'hydrater réellement — un mécanisme déjà confirmé pour le tableau
+qualité (rendu sur canvas virtualisé). En mode headless, ces API se
+comportent différemment d'un navigateur avec un vrai affichage.
+L'onglet actif dès le chargement initial (qualité) s'hydrate avant que
+cette différence n'entre en jeu ; les onglets activés après coup par un
+clic automatisé n'y échappent pas. Piste testable identifiée mais non
+explorée : lancer le navigateur en mode `headless=False` pour confirmer
+cette théorie précisément.
+
+**Pourquoi s'arrêter à 9 tentatives plutôt que continuer** : chacune
+reposait sur un raisonnement technique différent et légitime, et
+plusieurs ont fait progresser le diagnostic (la piste n°8 a changé la
+nature du symptôme, la n°9 a définitivement écarté une cause plausible).
+Le rendement marginal de nouvelles tentatives devenait cependant très
+faible, et ce point était explicitement le moins prioritaire des 5
+recommandations de la synthèse finale. Le dashboard fonctionne
+correctement en usage réel (confirmé à de multiples reprises par
+captures d'écran manuelles tout au long du projet) — la limite documentée
+concerne l'automatisation des tests, pas le produit lui-même.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
