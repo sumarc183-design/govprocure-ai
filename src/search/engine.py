@@ -63,6 +63,7 @@ def search(
     top_k: int = 20,
     bm25_candidates: int = 200,
     embedding_candidates: int = 200,
+    cache_embeddings_path: str | None = "data/processed/embeddings_cache.npz",
 ) -> tuple[pd.DataFrame, dict]:
     """Exécute le pipeline de recherche hybride complet.
 
@@ -74,6 +75,12 @@ def search(
     par chaque méthode avant fusion. Plus grand que top_k pour laisser
     la fusion RRF un vrai choix parmi plusieurs candidats de chaque
     méthode, pas seulement le top_k déjà tronqué par chacune.
+
+    cache_embeddings_path : fichier de cache des embeddings (voir
+    embeddings_search.py). Activé par défaut — chaque marché déjà
+    rencontré lors d'une recherche précédente réutilise son vecteur
+    plutôt que de le recalculer. Passer None pour désactiver (utile en
+    test, pour ne pas laisser de fichier de cache derrière soi).
     """
     parsed = parse_query(query)
     df_filtre = apply_strict_filters(df, parsed)
@@ -93,7 +100,7 @@ def search(
     bm25_index = BM25Index(df_filtre)
     ranking_bm25 = bm25_index.search(parsed.texte_libre, top_k=bm25_candidates)
 
-    embedding_index = EmbeddingIndex(df_filtre)
+    embedding_index = EmbeddingIndex(df_filtre, cache_path=cache_embeddings_path)
     ranking_embeddings = embedding_index.search(
         parsed.texte_libre, top_k=embedding_candidates
     )

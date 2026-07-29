@@ -453,6 +453,48 @@ famille que le cas SSI du bloc 3). Ça apporte un premier niveau de
 validation, même partiel, plutôt que de laisser cette question
 complètement ouverte comme au début du bloc 5.
 
+---
+
+## Itération post-bloc 5 : cache disque des embeddings
+
+**Contexte** : le benchmark du bloc 5 a chiffré le vrai goulot
+d'étranglement du projet (~28 secondes par recherche, dominé par le
+recalcul des embeddings à chaque requête). Cette itération s'attaque
+directement à ce point, identifié comme la recommandation n°1 de la
+synthèse finale.
+
+**Décision** : un cache disque (fichier `.npz`, `uid` → vecteur), plutôt
+qu'un index FAISS/Qdrant complet.
+
+**Pourquoi ce choix, et pas directement FAISS/Qdrant** : un vrai index
+de similarité (FAISS/Qdrant) demande une infrastructure et un calcul
+initial sur l'intégralité du corpus. Précalculer les embeddings des
+1,73M marchés uniques prendrait, en extrapolant linéairement le
+benchmark existant (27,5 s pour 931 candidats), environ **14 heures**
+sur une machine sans GPU — irréaliste dans ce contexte. Le cache disque
+est une solution intermédiaire honnête : il ne résout pas le cas d'un
+tout premier lancement sur un sous-ensemble jamais vu (toujours aussi
+lent la première fois), mais élimine le recalcul pour tout marché déjà
+rencontré lors d'une recherche précédente — pertinent dès que le même
+sous-ensemble de marchés est interrogé plusieurs fois (cas réaliste
+d'un dashboard utilisé en continu sur les mêmes filtres récurrents,
+ex: toujours "Île-de-France").
+
+**Design retenu** : le cache est cumulatif (grossit à chaque nouvelle
+recherche, ne perd jamais les entrées précédentes) et partiel (seuls les
+`uid` manquants sont réellement encodés à chaque appel). La logique de
+décision ("quels `uid` sont déjà en cache") est séparée du calcul
+d'encodage lui-même, pour rester testable sans modèle ni réseau.
+
+**Limite assumée, à nouveau** : ce n'est toujours pas une solution de
+production à l'échelle du corpus complet. Un vrai déploiement
+nécessiterait soit un calcul batch unique sur toute la base (plusieurs
+heures, une seule fois, sur une machine dédiée ou avec GPU), soit un
+index FAISS/Qdrant construit progressivement en tâche de fond. Le cache
+disque reste une amélioration réelle et mesurable pour l'usage actuel du
+projet (dashboard avec un nombre de filtres limité et réutilisés), pas
+une solution générale.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
