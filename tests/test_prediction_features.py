@@ -44,6 +44,25 @@ def test_filtrer_cible_valide_retire_montant_invalide(df_brut):
     assert (result["montant"] > 0).all()
 
 
+def test_filtrer_cible_valide_retire_dureeMois_invalide():
+    """Non-régression : bug trouvé en validation croisée — une durée de
+    21886 mois (>1800 ans, donnée aberrante) a fait exploser numériquement
+    une prédiction Ridge (R² de l'ordre de -10^71 observé avant correction).
+    """
+    df = pd.DataFrame({
+        "uid": ["m1", "m2", "m3", "m4"],
+        "offresRecues": [3.0, 5.0, 2.0, 4.0],
+        "montant": [100000.0, 100000.0, 100000.0, 100000.0],
+        "dureeMois": [-10.0, 12.0, 21886.0, 48.0],  # m1 et m3 invalides
+        "codeCPV": ["45000000"] * 4,
+        "procedure": ["Procédure adaptée"] * 4,
+        "nature": ["Marché"] * 4,
+        "acheteur_region_nom": ["Bretagne"] * 4,
+    })
+    result = filtrer_cible_valide(df)
+    assert set(result["uid"]) == {"m2", "m4"}
+
+
 def test_preparer_donnees_completes_deduplique_par_marche(df_brut):
     """m1 apparaît 2 fois (cotraitance) -> une seule ligne après préparation."""
     result = preparer_donnees_completes(df_brut)

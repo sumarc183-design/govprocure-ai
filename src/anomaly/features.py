@@ -78,7 +78,27 @@ def deduplicate_marches(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset="uid", keep="first").copy()
 
 
-def build_feature_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+def _log_signe(x: pd.Series) -> pd.Series:
+    """Transformation log signée : sign(x) * log1p(|x|).
+
+    Utilisée plutôt qu'un log1p classique car `montant` contient des
+    valeurs négatives (~2% du dataset, jusqu'à -7,1M€, voir audit qualité
+    du bloc 1) — un log1p standard échoue (indéfini) pour x <= -1. Le log
+    signé compresse l'échelle des deux côtés du zéro de façon symétrique,
+    en gardant le signe d'origine, plutôt que de forcer un filtrage des
+    valeurs négatives (qu'on veut justement garder comme candidates à la
+    détection d'anomalies, pas exclure comme au bloc prédiction).
+
+    Suggestion reçue en revue externe (log1p sur montant, avant LOF) —
+    adaptée ici pour gérer ce cas réel non anticipé dans la suggestion
+    d'origine.
+    """
+    return np.sign(x) * np.log1p(np.abs(x))
+
+
+def build_feature_matrix(
+    df: pd.DataFrame, transformation_log: bool = False
+) -> tuple[pd.DataFrame, list[str]]:
     """Construit la matrice de variables numériques pour les modèles d'anomalie.
 
     Retourne (df_enrichi, liste_des_colonnes_features).
@@ -88,6 +108,16 @@ def build_feature_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     Déduplique par marché (voir deduplicate_marches) avant tout calcul,
     pour que les médianes de groupe et l'entraînement des modèles portent
     sur des marchés uniques, pas sur des lignes (marché × titulaire).
+
+    transformation_log : si True, applique une transformation log signée
+    (voir _log_signe) sur `montant` et `montant_ratio_mediane_cpv` avant
+    la standardisation. Motivation : ces deux variables sont extrêmement
+    asymétriques (montants jusqu'à plusieurs milliards), ce qui peut faire
+    dominer les distances calculées par LOF par une poignée de valeurs
+    extrêmes. Désactivé par défaut pour ne pas changer le comportement
+    déjà validé dans les blocs précédents — à activer explicitement pour
+    comparer (voir docs/limitations.md pour le résultat de cette
+    comparaison).
     """
     df = deduplicate_marches(df)
     df = add_comparable_deviation(df)
@@ -100,6 +130,13 @@ def build_feature_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ]
 
     df_features = df[feature_cols].copy()
+
+    if transformation_log:
+        df_features["montant"] = _log_signe(df_features["montant"])
+        df_features["montant_ratio_mediane_cpv"] = _log_signe(
+            df_features["montant_ratio_mediane_cpv"]
+        )
+
     for col in feature_cols:
         median = df_features[col].median()
         df_features[col] = df_features[col].fillna(median)

@@ -23,6 +23,7 @@ def check_agreement_stability(
     n_repeats: int = 5,
     contamination: float = 0.05,
     seeds: list[int] | None = None,
+    transformation_log: bool = False,
 ) -> dict:
     """Répète compare_methods() sur plusieurs échantillons indépendants.
 
@@ -33,13 +34,19 @@ def check_agreement_stability(
     stable et reproductible. Un écart-type élevé indiquerait au contraire
     que le résultat dépend fortement du tirage — signe qu'il faudrait
     revoir la méthode ou augmenter la taille d'échantillon.
+
+    transformation_log : voir build_feature_matrix (src/anomaly/features.py).
+    Permet de comparer la stabilité avec et sans transformation log des
+    montants avant LOF (voir docs/limitations.md pour le résultat).
     """
     seeds = seeds or list(range(n_repeats))
     resultats = []
 
     for seed in seeds:
         sample = df.sample(n=min(sample_size, len(df)), random_state=seed)
-        result = compare_methods(sample, contamination=contamination)
+        result = compare_methods(
+            sample, contamination=contamination, transformation_log=transformation_log
+        )
         resultats.append({"seed": seed, **result})
 
     taux_accord_list = [r["taux_accord"] for r in resultats]
