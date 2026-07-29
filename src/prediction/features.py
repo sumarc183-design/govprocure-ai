@@ -36,6 +36,9 @@ COLONNES_REQUISES = [
 ]
 
 
+DUREE_MAX_PLAUSIBLE_MOIS = 240  # 20 ans — voir docstring filtrer_cible_valide
+
+
 def filtrer_cible_valide(df: pd.DataFrame) -> pd.DataFrame:
     """Garde uniquement les lignes exploitables pour l'entraînement :
     - offresRecues renseigné et valide (positif ou nul — un compte
@@ -44,17 +47,24 @@ def filtrer_cible_valide(df: pd.DataFrame) -> pd.DataFrame:
     - montant strictement positif (nécessaire pour la transformation
       log1p ; un montant négatif ou nul ferait planter log1p ou
       produirait une valeur non exploitable — mêmes 64 408 lignes
-      identifiées comme suspectes dans l'audit qualité du bloc 1).
+      identifiées comme suspectes dans l'audit qualité du bloc 1) ;
+    - dureeMois dans une plage plausible (0, 240] mois (20 ans).
 
-    Contrairement à la philosophie générale du projet ("flagger plutôt
-    que supprimer"), on exclut ici ces lignes explicitement : pour une
-    tâche d'entraînement supervisé, une valeur invalide dans la cible ou
-    une feature ne peut de toute façon pas contribuer utilement à
-    l'apprentissage — la nuance est documentée dans docs/decisions.md.
+    Le filtre sur dureeMois a été ajouté après un bug découvert en
+    validation croisée : une ligne avec dureeMois=21886 (>1800 ans,
+    donnée manifestement erronée) a fait exploser numériquement une
+    prédiction Ridge (coefficient raisonnable × valeur aberrante = valeur
+    log extrême, qui donne un nombre quasi infini une fois reconverti via
+    expm1 — R² de l'ordre de -10^71 observé). Vérifié sur l'ensemble du
+    dataset : 1042 valeurs négatives/nulles et 1864 valeurs > 240 mois
+    (jusqu'à 31410 mois, ~2618 ans) — 0,09% des lignes au total, un
+    filtrage qui n'amputerait quasiment pas le volume d'entraînement mais
+    protège contre ce type d'instabilité numérique.
     """
     df = df.dropna(subset=["offresRecues"])
     df = df[df["offresRecues"] >= 0]
     df = df[df["montant"] > 0]
+    df = df[(df["dureeMois"] > 0) & (df["dureeMois"] <= DUREE_MAX_PLAUSIBLE_MOIS)]
     return df
 
 

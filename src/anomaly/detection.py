@@ -40,18 +40,24 @@ def _scale_features(df_features: pd.DataFrame) -> pd.DataFrame:
 
 
 def detect_isolation_forest(
-    df: pd.DataFrame, contamination: float = 0.05
+    df: pd.DataFrame, contamination: float = 0.05, transformation_log: bool = False
 ) -> pd.DataFrame:
     """Détecte les anomalies avec Isolation Forest.
 
     contamination : proportion attendue d'anomalies dans les données
     (0.05 = 5%, à ajuster selon le contexte métier).
 
+    transformation_log : voir build_feature_matrix. Isolation Forest sépare
+    par seuils sur les valeurs brutes (arbres de décision), pas par
+    distances — contrairement à LOF, il n'a en théorie pas besoin de cette
+    transformation. Le paramètre est quand même exposé ici pour permettre
+    une comparaison symétrique avec detect_lof (voir docs/decisions.md).
+
     Ajoute deux colonnes :
     - anomaly_score_iforest : score brut (plus négatif = plus anormal)
     - is_anomaly_iforest : booléen selon le seuil de contamination
     """
-    df, feature_cols = build_feature_matrix(df)
+    df, feature_cols = build_feature_matrix(df, transformation_log=transformation_log)
     X = _scale_features(df[feature_cols])
 
     model = IsolationForest(
@@ -67,7 +73,10 @@ def detect_isolation_forest(
 
 
 def detect_lof(
-    df: pd.DataFrame, contamination: float = 0.05, n_neighbors: int = 20
+    df: pd.DataFrame,
+    contamination: float = 0.05,
+    n_neighbors: int = 20,
+    transformation_log: bool = False,
 ) -> pd.DataFrame:
     """Détecte les anomalies avec Local Outlier Factor.
 
@@ -76,11 +85,16 @@ def detect_lof(
     (complexité proche de O(n log n) à O(n²) selon l'implémentation) —
     à utiliser sur un échantillon si le dataset est très volumineux.
 
+    transformation_log : voir build_feature_matrix. Pertinent pour LOF en
+    particulier, qui se base sur des distances entre points — sans cette
+    transformation, les montants extrêmes (jusqu'à plusieurs milliards)
+    peuvent dominer le calcul des voisinages.
+
     Ajoute deux colonnes :
     - anomaly_score_lof : score brut (plus négatif = plus anormal)
     - is_anomaly_lof : booléen selon le seuil de contamination
     """
-    df, feature_cols = build_feature_matrix(df)
+    df, feature_cols = build_feature_matrix(df, transformation_log=transformation_log)
     X = _scale_features(df[feature_cols])
 
     model = LocalOutlierFactor(
@@ -95,7 +109,9 @@ def detect_lof(
     return df
 
 
-def compare_methods(df: pd.DataFrame, contamination: float = 0.05) -> dict:
+def compare_methods(
+    df: pd.DataFrame, contamination: float = 0.05, transformation_log: bool = False
+) -> dict:
     """Compare Isolation Forest et LOF sur le même dataset.
 
     Retourne un dict avec :
@@ -110,8 +126,12 @@ def compare_methods(df: pd.DataFrame, contamination: float = 0.05) -> dict:
     (Isolation Forest = anomalies globales, LOF = anomalies contextuelles
     locales). C'est une information à interpréter, pas un simple défaut.
     """
-    df_if = detect_isolation_forest(df, contamination=contamination)
-    df_lof = detect_lof(df, contamination=contamination)
+    df_if = detect_isolation_forest(
+        df, contamination=contamination, transformation_log=transformation_log
+    )
+    df_lof = detect_lof(
+        df, contamination=contamination, transformation_log=transformation_log
+    )
 
     is_anomaly_if = df_if["is_anomaly_iforest"]
     is_anomaly_lof = df_lof["is_anomaly_lof"]
