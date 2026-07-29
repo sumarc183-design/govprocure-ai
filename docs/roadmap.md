@@ -30,6 +30,8 @@ Légende statut : 🔲 à faire · 🟡 en cours · ✅ terminé
 1. ✅ Cache disque des embeddings (recommandation n°1) — gain mesuré : 47x plus rapide (23,7s → 0,5s)
 2. ✅ Centralisation partielle de la normalisation de texte (recommandation n°2) — module `src/common/text_normalization.py`, utilisé pour le nouveau code, modules existants non retouchés (risque de régression jugé trop élevé)
 3. ✅ Transformation log des montants avant LOF (suggestion différée depuis la 1ère revue externe) — taux d'accord Isolation Forest/LOF triplé (4,5% → 13,0%)
+4. ✅ Pondération RRF non uniforme, testée sur le cas "travaux de voirie" — résultat nuancé (favoriser BM25 améliore le top 10, favoriser les embeddings améliore le top 5, pas de poids universellement meilleur identifié sur ce seul cas)
+5. ✅ Tests fonctionnels du dashboard (Playwright) — 3/5 fiables (titre, onglets, tableau qualité), 2/5 marqués `xfail` après 9 tentatives de correction (limite de l'automatisation headless, pas un bug du dashboard)
 
 ## Bloc prédiction — détail
 
