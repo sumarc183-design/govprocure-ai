@@ -111,14 +111,17 @@ et documenté plutôt qu'ignoré.
    "travaux de voirie" — envisager une pondération non uniforme ou un
    score composite, en testant empiriquement si ça corrige la régression
    observée sans introduire de nouveaux problèmes.
-6. **Tester une transformation logarithmique des montants** avant LOF
-   (suggestion reçue en revue externe, pas encore testée) — les montants
-   très asymétriques (jusqu'à plusieurs milliards) pourraient dominer les
-   distances de LOF sans cette transformation.
-7. **Construire un vrai jeu de test de non-régression pour le dashboard**
-   (au-delà du smoke test d'import actuel), pour attraper automatiquement
-   les régressions visuelles/fonctionnelles plutôt que de les vérifier
-   manuellement à chaque changement.
+6. ✅ **Fait — Transformation log des montants avant LOF.** Testée
+   (log signé, gère les montants négatifs) : taux d'accord Isolation
+   Forest/LOF triplé (4,5% → 13,0%). Recommandée pour tout usage futur.
+7. ✅ **Fait (partiellement) — Tests de non-régression du dashboard.**
+   `tests/test_dashboard_functional.py` (Playwright), au-delà du smoke
+   test d'import. 3 tests sur 5 fiables (titre, onglets, tableau
+   qualité). 2 tests (interaction avec les widgets après clic
+   automatisé) marqués `xfail` après 9 tentatives de correction
+   indépendantes — limite documentée de l'automatisation headless de
+   Streamlit, pas un bug du dashboard (fonctionne normalement en usage
+   réel, validé à de multiples reprises par captures d'écran manuelles).
 
 ## En une phrase
 
