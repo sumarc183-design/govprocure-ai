@@ -64,6 +64,7 @@ def search(
     bm25_candidates: int = 200,
     embedding_candidates: int = 200,
     cache_embeddings_path: str | None = "data/processed/embeddings_cache.npz",
+    poids_fusion: tuple[float, float] | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Exécute le pipeline de recherche hybride complet.
 
@@ -81,6 +82,13 @@ def search(
     rencontré lors d'une recherche précédente réutilise son vecteur
     plutôt que de le recalculer. Passer None pour désactiver (utile en
     test, pour ne pas laisser de fichier de cache derrière soi).
+
+    poids_fusion : (poids_bm25, poids_embeddings) pour la fusion RRF.
+    None (par défaut) = poids égaux, comportement d'origine inchangé.
+    Ajouté suite à la découverte du bloc 5 (cas "travaux de voirie") où
+    la fusion à poids égal a dégradé un résultat BM25 correct par
+    coïncidence — voir docs/decisions.md pour le résultat empirique de
+    la comparaison.
     """
     parsed = parse_query(query)
     df_filtre = apply_strict_filters(df, parsed)
@@ -105,7 +113,8 @@ def search(
         parsed.texte_libre, top_k=embedding_candidates
     )
 
-    fused = reciprocal_rank_fusion([ranking_bm25, ranking_embeddings])
+    weights = list(poids_fusion) if poids_fusion is not None else None
+    fused = reciprocal_rank_fusion([ranking_bm25, ranking_embeddings], weights=weights)
     fused_top = fused.head(top_k)
 
     result = df_filtre[df_filtre["uid"].isin(fused_top["uid"])].merge(
