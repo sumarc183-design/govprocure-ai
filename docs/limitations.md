@@ -775,3 +775,37 @@ résultats BM25 du bloc 3) soit annulé — cette annotation valide la
 *précision* de la vérité terrain (peu de faux positifs), pas
 l'absence de biais dans sa *construction* (comment les mots-clés ont
 été choisis).
+
+## Itération post-bloc 5 : cache disque des embeddings
+
+**Ce qui a été fait** : `EmbeddingIndex` accepte maintenant un
+`cache_path` (activé par défaut dans `engine.search()`) — un fichier
+`.npz` qui stocke les vecteurs déjà calculés par `uid`. Chaque recherche
+ne recalcule que les marchés jamais rencontrés auparavant. Voir
+`docs/decisions.md` pour le raisonnement complet, notamment pourquoi un
+cache disque a été choisi plutôt qu'un index FAISS/Qdrant complet
+(précalculer les 1,73M marchés uniques prendrait ~14h sur cette machine,
+irréaliste).
+
+**À valider avec le vrai modèle (nécessite un accès internet)** :
+```
+python -m src.search.benchmark
+```
+La dernière section du benchmark ("Démonstration du cache d'embeddings")
+lance la même recherche deux fois sur le même échantillon de 100 000 :
+une première fois à froid (cache vide), une seconde à chaud (cache
+rempli), et affiche le facteur d'accélération mesuré.
+
+**Attendu** (à confirmer par l'exécution réelle) : le deuxième appel
+devrait être proche du temps BM25 seul (quelques dizaines de
+millisecondes) puisque l'encodage embeddings est entièrement évité —
+un gain de l'ordre de plusieurs centaines de fois par rapport aux ~28
+secondes mesurées sans cache.
+
+**Limite qui persiste malgré le cache** : le tout premier appel sur un
+nouveau sous-ensemble de marchés (jamais rencontré) reste aussi lent
+qu'avant — le cache n'aide qu'à partir de la deuxième recherche sur des
+marchés communs. Un utilisateur qui explore des filtres très variés
+(région différente à chaque fois) ne bénéficierait quasiment jamais du
+cache. Le gain réel dépend donc du profil d'usage (répétitif vs
+exploratoire), pas garanti dans tous les cas.

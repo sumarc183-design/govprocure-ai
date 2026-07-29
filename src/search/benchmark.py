@@ -75,9 +75,34 @@ def main():
             parsed.texte_libre, top_k=20
         ))
 
-        # Pipeline complet de bout en bout (inclut tout, y compris la refonte
-        # des index à chaque appel — reflète le comportement réel actuel)
-        mesurer("Pipeline complet (search())", lambda: search(sample, REQUETE_BENCHMARK, top_k=20))
+        # Pipeline complet de bout en bout, SANS cache (cache_embeddings_path=None)
+        # — préserve la mesure de référence "sans optimisation" déjà
+        # documentée dans docs/limitations.md. La démonstration du cache
+        # est faite séparément plus bas.
+        mesurer("Pipeline complet (search(), sans cache)", lambda: search(
+            sample, REQUETE_BENCHMARK, top_k=20, cache_embeddings_path=None
+        ))
+
+    # Démonstration du cache d'embeddings : le premier appel est "à froid"
+    # (rien en cache), le second "à chaud" (tout déjà calculé) — sur le
+    # même échantillon de 100 000, pour mesurer le gain réel du mécanisme
+    # de cache ajouté au bloc 5 (voir docs/decisions.md).
+    print(f"\n{'=' * 60}")
+    print("Démonstration du cache d'embeddings (échantillon 100 000)")
+    print("=" * 60)
+    sample = df.sample(n=min(100_000, len(df)), random_state=42)
+    chemin_cache = "data/processed/embeddings_cache_demo.npz"
+    import os
+    if os.path.exists(chemin_cache):
+        os.remove(chemin_cache)  # partir d'un cache vide pour la démo
+
+    def recherche_avec_cache():
+        return search(sample, REQUETE_BENCHMARK, top_k=20, cache_embeddings_path=chemin_cache)
+
+    duree_froide = mesurer("Recherche à froid (cache vide)", recherche_avec_cache)
+    duree_chaude = mesurer("Recherche à chaud (cache rempli)", recherche_avec_cache)
+    if duree_chaude > 0:
+        print(f"\n  Accélération : {duree_froide / duree_chaude:.1f}x plus rapide à chaud")
 
 
 if __name__ == "__main__":
