@@ -820,3 +820,44 @@ marchés communs. Un utilisateur qui explore des filtres très variés
 (région différente à chaque fois) ne bénéficierait quasiment jamais du
 cache. Le gain réel dépend donc du profil d'usage (répétitif vs
 exploratoire), pas garanti dans tous les cas.
+
+## Bloc prédiction : régression sur offresRecues
+
+**Ce qui fonctionne** : Random Forest bat nettement la baseline naïve
+et Ridge (R² réel = 0,676 vs -0,031 et 0,032), avec une erreur moyenne
+de 5,45 offres sur des valeurs allant de 0 à plusieurs milliers —
+raisonnable vu l'ampleur de la distribution.
+
+**Limite majeure, assumée et non contournable** : le modèle n'apprend
+que sur les ~40% de marchés où `offresRecues` est renseigné, et ce
+sous-ensemble n'est **pas représentatif** du dataset complet — le taux
+de manquant varie de 31% à quasiment 100% selon le type de procédure.
+Concrètement : le modèle sera peu fiable, voire inutilisable, sur les
+procédures où `offresRecues` est presque toujours absent (ex:
+"Procédure concurrentielle avec négociation", ~100% manquant). Ce n'est
+pas un défaut du modèle en soi, mais une limite structurelle des données
+disponibles — aucune quantité d'ingénierie ne peut faire apprendre un
+modèle sur des exemples qui n'existent pas.
+
+**Limite secondaire** : Ridge sous-performe fortement en espace réel
+(R²=0,032) malgré un score correct en espace log (0,179) — signe que la
+régression linéaire simple ne capture pas bien les cas à très nombreuses
+offres (queue de distribution). Documenté comme illustration du fait que
+l'espace de mesure (log vs réel) peut donner des conclusions très
+différentes sur la qualité d'un modèle, pas comme un défaut de Ridge en
+tant que tel.
+
+**Bug bonus corrigé en marge** : `procedure` n'avait jamais été
+normalisée (16 valeurs se réduisent à 11 après correction — même
+problème que `nature` au bloc 1, jamais traité sur ce champ). Corrigé
+via un nouveau module de normalisation partagé
+(`src/common/text_normalization.py`), qui centralise enfin une logique
+dupliquée 3 fois dans le projet — mais seulement pour le nouveau code :
+les modules existants (`cleaning.py`, `bm25_search.py`) n'ont pas été
+retouchés, jugé trop risqué à ce stade du projet.
+
+**Non fait, pour aller plus loin** : validation croisée (K-fold) plutôt
+qu'un seul découpage train/test ; recherche d'hyperparamètres (le
+Random Forest utilise des paramètres raisonnables mais non optimisés) ;
+analyse plus fine du sous-ensemble où le modèle échoue le plus (au-delà
+du simple constat du biais de sélection).

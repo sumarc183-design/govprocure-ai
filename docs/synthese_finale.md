@@ -44,16 +44,24 @@ bout en bout après chaque correction majeure, export CSV des résultats.
 compris via une revue externe du code) sont documentés avec leur
 correction, pas seulement listés.
 
+**Régression supervisée** — Prédiction du nombre d'offres reçues par un
+marché (Random Forest, R² réel = 0,676, MAE = 5,45 offres), comparée à
+une baseline naïve et à une régression Ridge, avec un biais de sélection
+des données (taux de manquant dépendant du type de procédure) découvert
+et documenté plutôt qu'ignoré.
+
 ## Ce que le projet ne sait pas faire (limites assumées)
 
 - **Ne détecte pas la fraude** — uniquement des anomalies statistiques à
   faire vérifier par un humain. Aucune vérité terrain de fraude confirmée
   n'existe pour entraîner un modèle supervisé, et ce choix méthodologique
   est assumé plutôt que contourné artificiellement.
-- **Ne prédit rien** — pas de prédiction temporelle, de score de risque
-  futur, ni de classification supervisée. Le projet fait de la détection
-  d'anomalies non supervisée et de la recherche d'information, pas du
-  machine learning prédictif classique.
+- **La prédiction supervisée reste limitée à un cas d'usage** — la
+  régression sur `offresRecues` comble le manque de compétences en
+  apprentissage supervisé, mais reste soumise à un biais de sélection
+  fort (le sous-ensemble annoté n'est pas représentatif de toutes les
+  procédures) et n'a pas été optimisée (pas de validation croisée, pas
+  de recherche d'hyperparamètres).
 - **Recherche lente sans cache, largement corrigée avec** — ~28 secondes
   de temps de réponse sur un cas d'usage typique sans optimisation, parce
   que les embeddings étaient recalculés à chaque requête. **Mise à jour** :
@@ -85,11 +93,14 @@ correction, pas seulement listés.
    couvrant l'intégralité du corpus (1,73M marchés), qui nécessiterait un
    calcul batch d'environ 14h sur cette machine sans GPU — hors
    périmètre réalisé, mais chemin clair pour la suite.
-2. **Centraliser les fonctions de normalisation et de déduplication**
-   (accents/casse, déduplication par marché) dans un module unique
-   partagé, plutôt que dans chaque module consommateur séparément —
-   trois bugs distincts (recherche, anomalies, script d'évaluation) sont
-   nés de cette même leçon non systématiquement réappliquée.
+2. ✅ **Fait (partiellement) — Centraliser la normalisation.** Un module
+   commun (`src/common/text_normalization.py`) a été créé après avoir
+   trouvé un 4e cas du même problème (`procedure`, jamais normalisée).
+   Utilisé pour le nouveau code (bloc prédiction). Reste non fait : migrer
+   les modules existants (`cleaning.py`, `bm25_search.py`) pour qu'ils
+   réutilisent ce module plutôt que leur propre logique dupliquée — repoussé
+   par prudence (code déjà testé et validé, risque de régression jugé
+   supérieur au bénéfice à ce stade avancé du projet).
 3. **Tester un modèle d'embeddings plus grand** pour les cas où le modèle
    léger actuel échoue (ex: "espaces verts"), en évaluant le compromis
    avec le temps de calcul supplémentaire.

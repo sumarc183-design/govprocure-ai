@@ -495,6 +495,109 @@ disque reste une amélioration réelle et mesurable pour l'usage actuel du
 projet (dashboard avec un nombre de filtres limité et réutilisés), pas
 une solution générale.
 
+---
+
+## Bloc prédiction : régression supervisée sur `offresRecues`
+
+### Choix de la cible : offresRecues plutôt qu'une cible de fraude fabriquée
+
+**Décision** : combler le manque de compétences en apprentissage
+supervisé identifié dans la synthèse finale en prédisant `offresRecues`
+(nombre d'offres reçues par un marché), pas une cible de fraude
+artificielle.
+
+**Pourquoi** : `offresRecues` est une variable réellement observée dans
+les données, pas une étiquette inventée pour l'occasion. Elle a un vrai
+sens métier (mesure de compétitivité d'un marché) et évite l'écueil
+qu'on s'était fixé dès le bloc 2 : ne jamais fabriquer artificiellement
+une vérité terrain de fraude qui n'existe pas.
+
+### Biais de sélection découvert : le taux de manquant dépend de la procédure
+
+**Constat** : `offresRecues` a ~60% de valeurs manquantes globalement,
+mais ce taux varie énormément selon le type de procédure — de 31%
+("Marché passé sans publicité") à quasiment 100% ("Procédure
+concurrentielle avec négociation"). Ce n'est pas un hasard.
+
+**Implication assumée, pas contournée** : le modèle entraîné sur les
+~40% de marchés où `offresRecues` est connu ne peut, par construction,
+apprendre que sur les types de procédure où cette donnée est
+généralement renseignée. Il généralisera mal (voire pas du tout) sur les
+procédures où elle est presque toujours absente. Documenté comme limite
+du modèle, pas corrigé artificiellement (imputer une valeur inventée
+pour ces cas serait pire que de reconnaître l'angle mort).
+
+### Bug bonus découvert : `procedure` n'a jamais été normalisée
+
+**Constat** : en creusant le biais de sélection ci-dessus, découverte
+que `procedure` contient 16 valeurs distinctes qui se réduisent à 11
+vraies catégories une fois normalisées — variantes d'apostrophe (`'`
+droite, `'` typographique, absente : "Appel d'offres" / "Appel
+d'offres" / "Appel d offres") et d'accents ("Procedure" / "Procédure"),
+jamais traitées jusqu'ici. Contrairement à `nature` (normalisée au bloc
+1), `procedure` n'avait jamais été passée dans une fonction de
+nettoyage.
+
+**Décision** : créer `src/common/text_normalization.py`, un module de
+normalisation partagé — implémente enfin la recommandation n°2 de la
+synthèse finale (centraliser une logique dupliquée 3 fois : bloc 1,
+bloc 3, et maintenant ce bug sur `procedure`). Utilisé pour ce nouveau
+bloc ; **le refactoring des modules existants** (`cleaning.py`,
+`bm25_search.py`) pour réutiliser ce module commun n'a **pas** été fait
+— jugé trop risqué de toucher du code déjà testé et validé si tard dans
+le projet, sans bénéfice fonctionnel immédiat. Centralisation partielle
+assumée : le nouveau code l'utilise, l'ancien reste tel quel.
+
+### Exclusion de données invalides plutôt que flag, ici seulement
+
+**Décision** : pour ce bloc spécifiquement, les lignes avec
+`offresRecues < 0` ou `montant <= 0` sont **exclues** de l'entraînement,
+pas seulement flaggées (contrairement à la philosophie générale du
+projet établie au bloc 1).
+
+**Pourquoi cette exception assumée** : une valeur invalide dans la
+cible ou une feature d'entraînement ne peut de toute façon pas
+contribuer utilement à l'apprentissage (elle ferait planter la
+transformation log1p, ou fausserait silencieusement le modèle). La
+distinction : flagger a du sens quand on veut *analyser* les données
+telles quelles (bloc 1, bloc 2) ; exclure a du sens quand une valeur est
+structurellement inutilisable pour la tâche précise (entraînement d'un
+modèle nécessitant des valeurs positives pour une transformation log).
+
+### Comparaison de modèles : pourquoi rapporter les métriques en espace log ET en espace réel
+
+**Décision** : chaque modèle est évalué avec R²/RMSE en espace log
+(celui de l'entraînement) et après reconversion (`expm1`) en espace réel
+(nombre d'offres).
+
+**Pourquoi les deux, pas un seul** : découvert en pratique que les deux
+peuvent se contredire. Ridge obtient R²=0,179 en log mais seulement
+R²=0,032 en réel ; Random Forest fait l'inverse (0,381 en log, 0,676 en
+réel — bien meilleur). Diagnostic : l'espace log compresse l'influence
+des valeurs extrêmes (un marché à 2500 offres et un à 10 offres sont
+proches une fois transformés en log), ce qui peut masquer qu'un modèle
+échoue à capturer la "queue" de la distribution (les cas à très
+nombreuses offres). Random Forest, plus flexible, capture mieux ces cas
+extrêmes, d'où son bien meilleur score en espace réel. Rapporter les
+deux évite de se fier à une seule métrique qui raconterait une histoire
+incomplète.
+
+### Résultats obtenus (référence, dataset complet)
+
+656 023 marchés exploitables (après filtrage cible valide + montant
+positif + déduplication marché). Comparaison sur le jeu de test (20%) :
+
+| Modèle | R² (log) | R² (réel) | MAE (réel) |
+|---|---|---|---|
+| Baseline (médiane) | -0,054 | -0,031 | 7,71 offres |
+| Ridge | 0,179 | 0,032 | 7,59 offres |
+| Random Forest | 0,381 | **0,676** | **5,45 offres** |
+
+Random Forest bat nettement la baseline et Ridge, en particulier en
+espace réel. Features les plus importantes (Random Forest) : le montant
+(log-transformé) domine largement, suivi de la durée, de la division
+CPV (notamment la division 45 - travaux), et du type de procédure.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
