@@ -54,10 +54,15 @@ correction, pas seulement listés.
   futur, ni de classification supervisée. Le projet fait de la détection
   d'anomalies non supervisée et de la recherche d'information, pas du
   machine learning prédictif classique.
-- **Recherche lente en l'état** — ~28 secondes de temps de réponse sur un
-  cas d'usage typique (~1000 candidats après filtre), parce que les
-  embeddings sont recalculés à chaque requête plutôt que précalculés.
-  Inutilisable tel quel pour une interface interactive en production.
+- **Recherche lente sans cache, largement corrigée avec** — ~28 secondes
+  de temps de réponse sur un cas d'usage typique sans optimisation, parce
+  que les embeddings étaient recalculés à chaque requête. **Mise à jour** :
+  un cache disque des embeddings a été ajouté après cette synthèse
+  initiale — mesuré, il donne un gain de **47x** sur une recherche
+  répétée (23,7 s → 0,5 s). Limite résiduelle : le tout premier appel sur
+  un sous-ensemble de marchés jamais rencontré reste aussi lent qu'avant;
+  le gain ne profite qu'aux recherches répétées sur des filtres communs
+  (voir docs/limitations.md, "Itération post-bloc 5").
 - **Échec persistant sur certains thèmes de recherche** — même avec les
   embeddings, la requête "maintenance des parcs municipaux" (reformulation
   de "espaces verts") reste à 0% de précision. Le modèle d'embeddings
@@ -74,11 +79,12 @@ correction, pas seulement listés.
 
 ## Ce qui serait fait différemment en production
 
-1. **Précalculer et indexer les embeddings** (FAISS ou Qdrant, déjà prévu
-   dans la stack initiale) plutôt que de les recalculer à chaque requête
-   — passerait le temps de réponse de ~28 secondes à probablement moins
-   d'une seconde. C'est le changement à plus fort impact, confirmé par
-   une mesure chiffrée, pas une intuition.
+1. ✅ **Fait (partiellement) — Précalculer les embeddings.** Un cache
+   disque a été ajouté (gain mesuré : 47x, 23,7s → 0,5s sur une
+   recherche répétée). Reste non fait : un vrai index FAISS/Qdrant
+   couvrant l'intégralité du corpus (1,73M marchés), qui nécessiterait un
+   calcul batch d'environ 14h sur cette machine sans GPU — hors
+   périmètre réalisé, mais chemin clair pour la suite.
 2. **Centraliser les fonctions de normalisation et de déduplication**
    (accents/casse, déduplication par marché) dans un module unique
    partagé, plutôt que dans chaque module consommateur séparément —
