@@ -821,6 +821,32 @@ marchés communs. Un utilisateur qui explore des filtres très variés
 cache. Le gain réel dépend donc du profil d'usage (répétitif vs
 exploratoire), pas garanti dans tous les cas.
 
+## Test différé : transformation log des montants avant LOF
+
+Suggestion reçue lors de la toute première revue externe, testée
+maintenant plutôt que laissée en suspens indéfiniment.
+
+**Résultat** : avec une transformation log signée sur les montants
+(voir docs/decisions.md pour le détail), le taux d'accord entre
+Isolation Forest et LOF **triple** — de 4,5% (sans transformation) à
+**13,0%** (avec), sur les mêmes 5 tirages que la mesure de référence.
+La stabilité relative reste comparable (écart-type proportionnel
+similaire, ~19% dans les deux cas).
+
+**Recommandation** : utiliser `transformation_log=True` pour toute
+analyse future — le paramètre existe (`build_feature_matrix`,
+`detect_isolation_forest`, `detect_lof`, `compare_methods`,
+`check_agreement_stability`), désactivé par défaut uniquement pour ne
+pas invalider silencieusement les chiffres déjà publiés ailleurs dans ce
+document (4,5% cité à plusieurs endroits en référence aux tirages
+initiaux).
+
+**Non fait, pour aller plus loin** : vérifier qualitativement si les
+anomalies détectées avec transformation ont plus de sens métier (pas
+seulement un meilleur taux d'accord statistique) — nécessiterait une
+inspection manuelle du contenu des nouvelles anomalies détectées,
+similaire à l'annotation humaine faite pour la recherche.
+
 ## Bloc prédiction : régression sur offresRecues
 
 **Ce qui fonctionne** : Random Forest bat nettement la baseline naïve
@@ -856,8 +882,40 @@ dupliquée 3 fois dans le projet — mais seulement pour le nouveau code :
 les modules existants (`cleaning.py`, `bm25_search.py`) n'ont pas été
 retouchés, jugé trop risqué à ce stade du projet.
 
-**Non fait, pour aller plus loin** : validation croisée (K-fold) plutôt
-qu'un seul découpage train/test ; recherche d'hyperparamètres (le
-Random Forest utilise des paramètres raisonnables mais non optimisés) ;
-analyse plus fine du sous-ensemble où le modèle échoue le plus (au-delà
-du simple constat du biais de sélection).
+## Aller plus loin sur la prédiction : validation croisée et hyperparamètres
+
+**Bug trouvé** : `dureeMois` contient des valeurs aberrantes (négatives,
+ou jusqu'à 31 410 mois soit ~2618 ans) — 0,09% des lignes, découvert via
+un R² catastrophique (~-10⁷¹) en validation croisée sur Ridge. Corrigé :
+`filtrer_cible_valide` exclut maintenant aussi `dureeMois` hors de la
+plage (0, 240] mois. Troisième variable (après `montant` et
+`offresRecues`) où ce dataset contient des valeurs numériquement
+aberrantes.
+
+**Validation croisée (5-fold, confirme les résultats initiaux)** :
+
+| Modèle | R² réel (single-split) | R² réel (5-fold CV) |
+|---|---|---|
+| Ridge | 0,032 | 0,039 ± 0,012 |
+| Random Forest | 0,676 | 0,633 ± 0,194 |
+
+Random Forest a un écart-type notable entre plis (0,194, ~30% de sa
+moyenne) — sa performance n'est pas parfaitement stable, à garder en
+tête.
+
+**Recherche d'hyperparamètres — résultat contre-intuitif, persistant même
+après correction** : le modèle sélectionné par `RandomizedSearchCV`
+optimisé sur le R² en espace log est moins bon en espace réel que le
+modèle par défaut (0,515 vs 0,596). Un scorer personnalisé en espace
+réel (`SCORER_ESPACE_REEL`) a été ajouté pour corriger ça — mais même
+avec ce scorer corrigé, le modèle sélectionné (0,517) reste **toujours
+moins bon** que la configuration par défaut sur le jeu de test retenu.
+Interprétation honnête : soit le budget de recherche (15 combinaisons,
+sous-échantillon de 50 000) est trop limité, soit les paramètres par
+défaut étaient déjà une configuration raisonnablement bonne pour ce
+problème — non tranché, rapporté tel quel plutôt que caché.
+
+**Non fait, pour aller plus loin** : augmenter le budget de recherche
+(plus d'itérations, dataset complet) ; analyse plus fine du sous-ensemble
+où le modèle échoue le plus (au-delà du simple constat du biais de
+sélection).
