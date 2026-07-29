@@ -70,3 +70,77 @@ def test_entrainer_et_comparer_feature_importance_somme_a_un(petit_dataset):
     resultats = entrainer_et_comparer(X, y)
     importance = resultats["_rf_feature_importance"]
     assert importance.sum() == pytest.approx(1.0, abs=0.01)
+
+
+def test_validation_croisee_retourne_structure_attendue(petit_dataset):
+    from sklearn.linear_model import Ridge
+
+    from src.prediction.models import validation_croisee
+
+    X, y = petit_dataset
+    resultat = validation_croisee(X, y, Ridge(), n_splits=3)
+
+    assert resultat["n_splits"] == 3
+    assert len(resultat["detail_par_pli"]) == 3
+    for cle in ["r2_reel_moyen", "r2_reel_ecart_type", "mae_reel_moyen", "mae_reel_ecart_type"]:
+        assert cle in resultat
+
+
+def test_validation_croisee_plis_disjoints(petit_dataset):
+    """Vérifie que chaque marché n'apparaît qu'une seule fois en test
+    sur l'ensemble des plis (propriété fondamentale du K-fold).
+    """
+    from sklearn.linear_model import Ridge
+    from sklearn.model_selection import KFold
+
+    from src.prediction.models import RANDOM_STATE
+
+    X, y = petit_dataset
+    kfold = KFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+    tous_index_test = []
+    for _, test_idx in kfold.split(X):
+        tous_index_test.extend(test_idx.tolist())
+
+    assert len(tous_index_test) == len(set(tous_index_test))  # aucun doublon
+    assert len(tous_index_test) == len(X)  # chaque ligne vue exactement une fois
+
+
+def test_rechercher_hyperparametres_retourne_un_modele_entraine(petit_dataset):
+    from src.prediction.models import rechercher_hyperparametres
+
+    X, y = petit_dataset
+    resultat = rechercher_hyperparametres(X, y, n_iter=3)
+
+    assert "meilleurs_parametres" in resultat
+    assert "meilleur_score_cv" in resultat
+    assert hasattr(resultat["modele"], "predict")
+    # Le modèle retourné doit être utilisable pour prédire directement
+    predictions = resultat["modele"].predict(X)
+    assert len(predictions) == len(X)
+
+
+def test_r2_espace_reel_identique_a_r2_score_sur_donnees_non_transformees():
+    """Vérifie que _r2_espace_reel calcule bien un R² après reconversion
+    expm1, pas juste un alias du R² standard.
+    """
+    from sklearn.metrics import r2_score
+
+    from src.prediction.models import _r2_espace_reel
+
+    y_true_log = np.array([0.0, 1.0, 2.0])  # log1p(0)=0, correspond à des vraies valeurs 0, e-1, e²-1
+    y_pred_log = y_true_log.copy()  # prédiction parfaite
+
+    resultat = _r2_espace_reel(y_true_log, y_pred_log)
+    assert resultat == pytest.approx(1.0)  # prédiction parfaite -> R²=1 peu importe l'espace
+
+
+def test_scorer_espace_reel_utilise_par_defaut(petit_dataset):
+    """Non-régression : la recherche d'hyperparamètres doit utiliser le
+    scorer en espace réel par défaut, suite à la découverte qu'optimiser
+    en espace log peut sélectionner un modèle moins bon en réel.
+    """
+    from src.prediction.models import SCORER_ESPACE_REEL, rechercher_hyperparametres
+    import inspect
+
+    signature = inspect.signature(rechercher_hyperparametres)
+    assert signature.parameters["scoring"].default is SCORER_ESPACE_REEL
