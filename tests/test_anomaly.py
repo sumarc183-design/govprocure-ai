@@ -123,6 +123,66 @@ def test_build_feature_matrix_deduplique_par_marche():
     assert set(df_result["uid"]) == {"m1", "m2", "m3"}
 
 
+def test_log_signe_gere_les_valeurs_negatives():
+    """La transformation log signée doit rester définie pour les montants
+    négatifs (~2% du dataset réel, jusqu'à -7,1M€) — un log1p classique
+    échouerait (indéfini pour x <= -1).
+    """
+    from src.anomaly.features import _log_signe
+
+    valeurs = pd.Series([-7_000_000.0, -1.0, 0.0, 1.0, 7_000_000.0])
+    resultat = _log_signe(valeurs)
+    assert not resultat.isna().any()
+    # Le signe d'origine doit être préservé
+    assert resultat.iloc[0] < 0
+    assert resultat.iloc[4] > 0
+    assert resultat.iloc[2] == 0.0
+
+
+def test_log_signe_compresse_les_valeurs_extremes():
+    """La transformation doit réduire l'écart relatif entre une valeur
+    normale et une valeur extrême (c'est tout l'intérêt de la transformation).
+    """
+    from src.anomaly.features import _log_signe
+
+    valeurs = pd.Series([100_000.0, 100_000_000_000.0])  # ratio brut : 1 000 000x
+    resultat = _log_signe(valeurs)
+    ratio_brut = valeurs.iloc[1] / valeurs.iloc[0]
+    ratio_apres_log = resultat.iloc[1] / resultat.iloc[0]
+    assert ratio_apres_log < ratio_brut
+
+
+def test_build_feature_matrix_transformation_log_desactivee_par_defaut():
+    """Non-régression : le comportement par défaut (sans transformation_log)
+    ne doit pas changer par rapport aux blocs précédents déjà validés.
+    """
+    from src.anomaly.features import build_feature_matrix
+
+    df = pd.DataFrame({
+        "uid": ["m1", "m2"],
+        "montant": [100_000.0, 200_000.0],
+        "dureeMois": [12.0, 24.0],
+        "codeCPV": ["45000000", "45000000"],
+    })
+    df_defaut, _ = build_feature_matrix(df)
+    df_explicite, _ = build_feature_matrix(df, transformation_log=False)
+    pd.testing.assert_frame_equal(df_defaut, df_explicite)
+
+
+def test_build_feature_matrix_transformation_log_change_les_valeurs():
+    from src.anomaly.features import build_feature_matrix
+
+    df = pd.DataFrame({
+        "uid": ["m1", "m2"],
+        "montant": [100_000.0, 200_000_000.0],
+        "dureeMois": [12.0, 24.0],
+        "codeCPV": ["45000000", "45000000"],
+    })
+    df_sans_log, _ = build_feature_matrix(df, transformation_log=False)
+    df_avec_log, _ = build_feature_matrix(df, transformation_log=True)
+    assert not df_sans_log["montant"].equals(df_avec_log["montant"])
+
+
 def test_deduplicate_marches_garde_une_ligne_par_uid():
     from src.anomaly.features import deduplicate_marches
 
