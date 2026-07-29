@@ -12,10 +12,11 @@
 |---|---|
 | **Données** | 3,14M marchés publics (data.gouv.fr / decp.info), 1,73M marchés uniques après regroupement |
 | **Qualité** | Score de fiabilité par colonne — 64 408 montants incohérents détectés, catégories normalisées |
-| **Anomalies** | Isolation Forest + LOF comparés, seulement 4,5% d'accord entre les deux — résultat stable et expliqué, pas un bug |
-| **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels |
+| **Anomalies** | Isolation Forest + LOF comparés, taux d'accord de 4,5% (13,0% avec transformation log testée) — résultat stable et expliqué, pas un bug |
+| **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels, cache disque des embeddings (gain mesuré : 47x) |
+| **Prédiction** | Régression du nombre d'offres reçues (Random Forest, R²=0,676, MAE=5,45 offres), biais de sélection des données identifié et documenté |
 | **Robustesse** | 2 bugs méthodologiques trouvés via revue externe et corrigés (déduplication, calcul NDCG), documentés avec preuve avant/après |
-| **Tests** | 69 tests automatisés, CI GitHub Actions |
+| **Tests** | 98 tests automatisés, CI GitHub Actions |
 
 ## Le projet en images
 
@@ -28,6 +29,7 @@ Ce n'est pas un projet où "tout marche parfaitement". Trois exemples concrets :
 - **Un bug trouvé et corrigé en direct** : la fonction de détection d'anomalies ne dédupliquait pas les marchés en cotraitance, faussant le taux d'accord entre modèles et faisant apparaître les mêmes marchés plusieurs fois dans les alertes. Trouvé via une revue externe du code, corrigé, chiffres recalculés avant/après (voir [decisions.md](docs/decisions.md)).
 - **Un calcul de métrique corrigé** : le NDCG@K initial ne pénalisait pas les résultats pertinents manqués (`P@10=0.7` donnait pourtant `NDCG@10=1.0`, incohérent). Corrigé, effet mesuré : `0.431 → 0.146` sur un cas réel.
 - **Un résultat nuancé plutôt qu'idéalisé** : sur 4 requêtes de recherche reformulées sans aucun mot en commun avec la vérité terrain, les embeddings sauvent la mise sur 2 thèmes, dégradent le résultat sur 1, et échouent totalement sur le dernier. Documenté tel quel plutôt que présenté comme une victoire uniforme.
+- **Un biais de sélection assumé, pas caché** : le modèle de prédiction (nombre d'offres reçues) n'apprend que sur les ~40% de marchés où cette donnée est renseignée — et ce taux de renseignement varie de 31% à 100% selon le type de procédure. Documenté comme une vraie limite du modèle, pas contourné par une imputation artificielle.
 
 ## Structure du repo
 
@@ -35,12 +37,14 @@ Ce n'est pas un projet où "tout marche parfaitement". Trois exemples concrets :
 govprocure-ai/
 ├── data/
 │   ├── raw/            # données brutes (non versionnées, voir .gitignore)
-│   └── processed/      # données nettoyées / transformées
+│   └── processed/      # données nettoyées / transformées (cache embeddings, etc.)
 ├── src/
-│   ├── quality/        # Bloc 1 — contrôle qualité des données
-│   ├── anomaly/        # Bloc 2 — détection d'anomalies
-│   ├── search/         # Bloc 3 — moteur de recherche hybride + évaluation
-│   └── dashboard/       # Bloc 4 — interface Streamlit
+│   ├── common/          # normalisation de texte partagée
+│   ├── quality/         # Bloc 1 — contrôle qualité des données
+│   ├── anomaly/         # Bloc 2 — détection d'anomalies
+│   ├── search/          # Bloc 3 — moteur de recherche hybride + évaluation
+│   ├── dashboard/        # Bloc 4 — interface Streamlit
+│   └── prediction/       # Bloc bonus — régression supervisée (offresRecues)
 ├── tests/              # tests unitaires et de robustesse (pytest)
 ├── docs/               # documentation, roadmap, décisions, limites
 └── .github/workflows/  # CI (GitHub Actions)
