@@ -598,6 +598,153 @@ espace réel. Features les plus importantes (Random Forest) : le montant
 (log-transformé) domine largement, suivi de la durée, de la division
 CPV (notamment la division 45 - travaux), et du type de procédure.
 
+---
+
+## Test différé du bloc 2 : transformation log des montants avant LOF
+
+**Contexte** : suggestion reçue lors de la toute première revue externe
+du projet ("tester une transformation logarithmique des montants avant
+LOF"), notée comme travail futur mais jamais testée jusqu'ici — refermée
+maintenant, après le bloc prédiction, par souci de ne pas laisser de
+promesse non tenue.
+
+**Décision** : `build_feature_matrix` accepte un paramètre
+`transformation_log` (désactivé par défaut, pour ne pas changer le
+comportement déjà documenté dans les résultats précédents). Utilise un
+**log signé** (`sign(x) * log1p(|x|)`), pas un `log1p` classique : le
+dataset contient ~2% de montants négatifs (jusqu'à -7,1M€, voir audit
+qualité du bloc 1), et un `log1p` standard est indéfini pour ces
+valeurs. Le log signé compresse l'échelle des deux côtés du zéro tout en
+gardant le signe d'origine — cohérent avec le choix de ne jamais exclure
+ces montants négatifs de la détection d'anomalies (contrairement au
+bloc prédiction, où ils sont exclus car inutilisables pour
+l'entraînement).
+
+**Résultat mesuré** (5 tirages de 20 000 marchés, mêmes seeds que la
+mesure de référence) :
+
+| | Sans transformation (référence) | Avec transformation log |
+|---|---|---|
+| Taux d'accord moyen | 4,5% | **13,0%** |
+| Écart-type | 0,85% | 2,51% |
+
+**Interprétation** : le taux d'accord entre Isolation Forest et LOF
+**triple** avec la transformation, tout en restant proportionnellement
+stable (écart-type relatif similaire dans les deux cas, ~19%). Ça
+confirme l'hypothèse de la revue externe : sans transformation, LOF
+était probablement dominé par les valeurs extrêmes de montant dans son
+calcul de distances, le faisant diverger fortement d'Isolation Forest.
+Avec la transformation, LOF détecte des anomalies bien mieux alignées
+avec Isolation Forest — signe d'un comportement plus sensé, pas
+seulement d'un chiffre différent.
+
+**Décision finale** : garder `transformation_log=False` par défaut
+(pour ne pas invalider silencieusement les résultats déjà documentés et
+discutés ailleurs dans ce projet), mais **recommander explicitement**
+`transformation_log=True` pour tout usage futur ou toute nouvelle
+analyse — le gain est net et le raisonnement qui le justifie est solide.
+
+---
+
+## Aller plus loin sur la prédiction : validation croisée et hyperparamètres
+
+### Bug trouvé en validation croisée : dureeMois contient des valeurs aberrantes
+
+**Contexte** : en ajoutant la validation croisée K-fold pour consolider
+les résultats du bloc prédiction, un pli a produit un R² catastrophique
+(de l'ordre de -10⁷¹) pour Ridge.
+
+**Diagnostic** : une ligne avec `dureeMois = 21886` (plus de 1800 ans,
+donnée manifestement erronée) a fait exploser numériquement la
+prédiction — un coefficient Ridge raisonnable multiplié par une valeur
+aberrante donne une prédiction log extrême, qui devient quasi infinie
+une fois reconvertie via `expm1`. Vérification sur l'ensemble du
+dataset : 1042 valeurs négatives/nulles et 1864 valeurs supérieures à
+240 mois (jusqu'à 31 410 mois, ~2618 ans) — 0,09% des lignes, une
+proportion infime mais suffisante pour casser un modèle linéaire non
+robuste à ce type d'aberration.
+
+**Correction** : `filtrer_cible_valide` exclut maintenant aussi les
+lignes avec `dureeMois` hors de la plage (0, 240] mois (20 ans, seuil
+arbitraire mais raisonnable pour un marché public). Troisième variable
+(après `montant` et `offresRecues`) où le dataset s'est révélé contenir
+des valeurs numériquement aberrantes — motif récurrent de ce dataset
+plutôt qu'un cas isolé.
+
+**Leçon méthodologique** : ce bug n'était pas détectable avec un simple
+découpage train/test (la ligne aberrante n'était probablement pas tombée
+dans le jeu de test lors du split initial) — c'est justement la
+validation croisée, en testant plusieurs découpages, qui l'a fait
+apparaître. Argument concret en faveur de la validation croisée au-delà
+du principe théorique : elle attrape des problèmes qu'un seul découpage
+peut manquer par chance.
+
+### Validation croisée : les résultats initiaux ne sont pas un coup de chance
+
+**Résultat** (5-fold, sous-échantillon de 50 000 marchés pour rester
+rapide à exécuter ; résultat initial mesuré sur les 656 023 marchés
+complets) :
+
+| Modèle | R² réel (single-split, référence) | R² réel (5-fold CV) |
+|---|---|---|
+| Ridge | 0,032 | 0,039 ± 0,012 |
+| Random Forest | 0,676 | 0,633 ± 0,194 |
+
+Les deux résultats restent cohérents avec la mesure initiale — la
+validation croisée confirme que ce n'était pas un artefact du découpage
+initial. L'écart-type de Random Forest (0,194, soit ~30% de sa moyenne)
+est notable : sa performance varie sensiblement selon les plis, une
+limite honnête à garder en tête plutôt qu'à ignorer.
+
+### Recherche d'hyperparamètres : optimiser en espace log peut dégrader le résultat réel
+
+**Ce qui a été fait** : `RandomizedSearchCV` sur Random Forest (15
+combinaisons, validation croisée à 3 plis interne), optimisant d'abord
+le R² en espace log (l'espace d'entraînement).
+
+**Premier résultat, sur un découpage train/test identique pour une
+comparaison équitable** :
+
+| Modèle | R² réel | MAE réel |
+|---|---|---|
+| Random Forest par défaut (100 arbres, profondeur 15) | 0,596 | 5,83 offres |
+| Random Forest "optimisé" (scorer log) | 0,515 | 6,23 offres |
+
+**Le modèle "optimisé" est en réalité moins bon** en espace réel, malgré
+un meilleur score en validation croisée pendant la recherche (0,345 en
+log). Même leçon que celle découverte avec Ridge (bloc prédiction
+initial) : optimiser une métrique en espace log ne garantit pas un gain
+en espace réel.
+
+**Correction tentée** : un scorer personnalisé (`_r2_espace_reel`,
+`SCORER_ESPACE_REEL`) a été ajouté, calculant le R² directement en
+espace réel (après `expm1`) pour que `RandomizedSearchCV` optimise la
+bonne métrique.
+
+**Résultat après correction, honnête** : le modèle sélectionné avec ce
+nouveau scorer (`n_estimators=200, min_samples_leaf=2, max_features=0.5,
+max_depth=12`) obtient R²_réel=**0,517** sur le jeu de test — **toujours
+moins bon** que le Random Forest par défaut (0,596), malgré un score de
+0,566 pendant la recherche elle-même (en validation croisée interne à 3
+plis sur le train). La correction de la métrique de score n'a donc pas
+suffi à battre la configuration par défaut sur ce jeu de test précis.
+
+**Interprétation honnête** : deux explications possibles, non
+tranchées : (1) le budget de recherche (15 combinaisons aléatoires sur
+un sous-échantillon de 50 000) est probablement trop limité pour
+explorer l'espace des hyperparamètres efficacement ; (2) les paramètres
+par défaut choisis initialement (100 arbres, profondeur 15) étaient déjà
+une configuration raisonnablement bonne pour ce problème précis, pas
+si simple à améliorer avec un budget de recherche limité. Ce résultat
+illustre que la recherche d'hyperparamètres n'est pas une solution
+magique — elle peut ne pas apporter de gain, et c'est un résultat
+légitime à rapporter tel quel plutôt qu'à cacher.
+
+**Non fait, pour aller plus loin** : augmenter le budget de recherche
+(plus d'itérations, jeu de données complet plutôt qu'un sous-échantillon
+de 50 000), ou tester une grille plus ciblée autour des valeurs par
+défaut plutôt qu'un espace de recherche aussi large.
+
 ## Pratiques transverses
 
 ### Un commit = un changement logique
