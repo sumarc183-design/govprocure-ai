@@ -787,20 +787,31 @@ cache disque a été choisi plutôt qu'un index FAISS/Qdrant complet
 (précalculer les 1,73M marchés uniques prendrait ~14h sur cette machine,
 irréaliste).
 
-**À valider avec le vrai modèle (nécessite un accès internet)** :
-```
-python -m src.search.benchmark
-```
-La dernière section du benchmark ("Démonstration du cache d'embeddings")
-lance la même recherche deux fois sur le même échantillon de 100 000 :
-une première fois à froid (cache vide), une seconde à chaud (cache
-rempli), et affiche le facteur d'accélération mesuré.
+**Résultats mesurés** (échantillon de 100 000, `python -m src.search.benchmark`) :
 
-**Attendu** (à confirmer par l'exécution réelle) : le deuxième appel
-devrait être proche du temps BM25 seul (quelques dizaines de
-millisecondes) puisque l'encodage embeddings est entièrement évité —
-un gain de l'ordre de plusieurs centaines de fois par rapport aux ~28
-secondes mesurées sans cache.
+| | Temps |
+|---|---|
+| Recherche à froid (cache vide) | 23,7 s |
+| Recherche à chaud (cache rempli) | 0,5 s |
+| **Accélération** | **47,1x** |
+
+Confirme concrètement l'hypothèse : le deuxième appel se rapproche du
+temps BM25 seul (quelques dizaines de millisecondes), l'encodage
+embeddings étant entièrement évité une fois le cache rempli. Le gain de
+47x est légèrement inférieur à l'estimation initiale ("plusieurs
+centaines de fois"), probablement parce que la recherche à chaud
+recharge quand même le cache disque et effectue le produit scalaire sur
+tous les vecteurs — pas un temps strictement nul, mais un gain massif et
+bien réel.
+
+Pour rappel, également mesuré dans ce même run (comportement sans cache,
+inchangé, cohérent avec les résultats précédents) :
+
+| Échantillon | Candidats filtrés | Construction embeddings | Pipeline complet sans cache |
+|---|---|---|---|
+| 10 000 | 105 | 11,8 s | 3,3 s |
+| 50 000 | 483 | 11,6 s | 12,1 s |
+| 100 000 | 931 | 22,9 s | 25,1 s |
 
 **Limite qui persiste malgré le cache** : le tout premier appel sur un
 nouveau sous-ensemble de marchés (jamais rencontré) reste aussi lent
