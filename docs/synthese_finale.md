@@ -17,10 +17,12 @@ suppression, pour garder la traçabilité).
 **Détection d'anomalies** — Isolation Forest et Local Outlier Factor
 comparés en profondeur sur les marchés (dédupliqués par cotraitance).
 Les deux méthodes ne sont d'accord que sur ~4,5% des cas — résultat
-stable et reproductible (écart-type 0,85% sur 5 tirages), qui illustre
-concrètement leur complémentarité (anomalies globales vs contextuelles)
-plutôt qu'une faiblesse. Isolation Forest passe à l'échelle sur les 3M
-lignes ; LOF non (limite mémoire au-delà de 2-3M lignes).
+stable et reproductible (écart-type 0,85% sur 5 tirages), cohérent avec
+des notions différentes de l'anomalie (globale vs contextuelle) plutôt
+qu'un signe de dysfonctionnement. Ce constat ne prouve pas à lui seul
+une réelle complémentarité utile — une validation métier resterait
+nécessaire pour le confirmer. Isolation Forest passe à l'échelle sur les
+3M lignes ; LOF non (limite mémoire au-delà de 2-3M lignes).
 
 **Recherche hybride** — Filtres stricts (région, montant) + BM25 +
 embeddings sémantiques, fusionnés par Reciprocal Rank Fusion. Sur des
@@ -60,8 +62,15 @@ et documenté plutôt qu'ignoré.
   régression sur `offresRecues` comble le manque de compétences en
   apprentissage supervisé, mais reste soumise à un biais de sélection
   fort (le sous-ensemble annoté n'est pas représentatif de toutes les
-  procédures) et n'a pas été optimisée (pas de validation croisée, pas
-  de recherche d'hyperparamètres).
+  procédures). **Mise à jour** : validation croisée (5-fold) et
+  recherche d'hyperparamètres ont depuis été réalisées. Random Forest en
+  validation croisée : R² réel = 0,633 ± 0,194 (cohérent avec le résultat
+  initial de 0,676 sur un seul découpage, confirme que ce n'était pas un
+  coup de chance). La recherche d'hyperparamètres n'a en revanche **pas**
+  amélioré le résultat — le modèle "optimisé" reste moins bon que la
+  configuration par défaut sur le jeu de test retenu (0,517 contre
+  0,596), même après correction du score utilisé pour l'optimisation
+  (voir docs/limitations.md, "Aller plus loin sur la prédiction").
 - **Recherche lente sans cache, largement corrigée avec** — ~28 secondes
   de temps de réponse sur un cas d'usage typique sans optimisation, parce
   que les embeddings étaient recalculés à chaque requête. **Mise à jour** :

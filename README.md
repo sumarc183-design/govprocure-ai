@@ -12,15 +12,17 @@
 |---|---|
 | **Données** | 3,14M marchés publics (data.gouv.fr / decp.info), 1,73M marchés uniques après regroupement |
 | **Qualité** | Score de fiabilité par colonne — 64 408 montants incohérents détectés, catégories normalisées |
-| **Anomalies** | Isolation Forest + LOF comparés, taux d'accord de 4,5% (13,0% avec transformation log testée) — résultat stable et expliqué, pas un bug |
+| **Anomalies** | Isolation Forest + LOF comparés, taux d'accord de 4,5% (13,0% avec transformation log testée) — résultat stable, cohérent avec des notions différentes de l'anomalie (pas une preuve de complémentarité en soi, une validation métier serait nécessaire) |
 | **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels, cache disque des embeddings (gain mesuré : 47x) |
 | **Prédiction** | Régression du nombre d'offres reçues (Random Forest, R²=0,676, MAE=5,45 offres), biais de sélection des données identifié et documenté |
 | **Robustesse** | 2 bugs méthodologiques trouvés via revue externe et corrigés (déduplication, calcul NDCG), documentés avec preuve avant/après |
-| **Tests** | 112 tests automatisés (dont 2 xfail documentés sur l'automatisation headless du dashboard), CI GitHub Actions |
+| **Tests** | 112 tests collectés — 107 s'exécutent intégralement en CI ; les 5 tests fonctionnels du dashboard nécessitent les données locales (sautés en CI, dataset non versionné) et, une fois exécutés en local, 3 passent et 2 sont `xfail` (limite documentée de l'automatisation headless) |
 
 ## Le projet en images
 
-*(Captures d'écran du dashboard — onglets Qualité, Anomalies, Recherche — à ajouter dans `docs/images/` et référencer ici.)*
+![Qualité des données](docs/images/dashboard-qualite-donnees.png)
+![Détection d'anomalies](docs/images/dashboard-anomalies-resultats.png)
+![Recherche hybride](docs/images/dashboard-recherche-resultats.png)
 
 ## Pourquoi ce projet est différent d'un portfolio classique
 
@@ -92,6 +94,14 @@ streamlit run src/dashboard/app.py
 
 ```bash
 pytest tests/ -v
+```
+
+Pour lancer aussi les tests fonctionnels du dashboard (Playwright, nécessite le dataset local — voir "Récupérer les données" ci-dessus) :
+
+```bash
+pip install -r requirements-dev.txt
+playwright install chromium
+pytest tests/test_dashboard_functional.py -v
 ```
 
 ## Documentation complète

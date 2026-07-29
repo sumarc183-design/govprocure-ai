@@ -65,9 +65,16 @@ les données :
   être les valeurs les plus extrêmes du dataset, sont atypiques par
   rapport à leur voisinage immédiat.
 
-**Implication méthodologique** : les deux méthodes sont complémentaires,
-pas redondantes. Un système de priorisation robuste devrait probablement
-combiner les deux plutôt que choisir l'une ou l'autre.
+**Implication méthodologique, nuancée** : les deux méthodes ne sont pas
+redondantes (elles capturent des notions différentes de l'anomalie),
+mais ce constat statistique ne prouve pas à lui seul qu'elles sont
+réellement *complémentaires* au sens utile du terme — un faible taux
+d'accord peut aussi signifier que l'une des deux (ou les deux) détecte
+du bruit plutôt que des anomalies pertinentes. Combiner les deux dans un
+système de priorisation reste une piste raisonnable, mais nécessiterait
+une validation métier (des cas confirmés, ou au moins un avis humain sur
+un échantillon des désaccords) avant de conclure que la combinaison
+apporte réellement de la valeur.
 
 **Limite technique connue** : LOF émet un avertissement scikit-learn sur
 la présence de valeurs dupliquées, qui peuvent fausser le calcul de

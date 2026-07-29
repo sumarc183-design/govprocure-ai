@@ -8,7 +8,9 @@ fonctionne — attrape des régressions visuelles/fonctionnelles qu'un test
 d'import ne peut pas voir.
 
 Nécessite :
-- `pip install playwright` (voir requirements.txt)
+- `pip install -r requirements-dev.txt` (playwright n'est pas dans les
+  dépendances principales de `requirements.txt` — c'est un outil de
+  test, pas une dépendance de l'application elle-même)
 - `playwright install chromium` (télécharge le navigateur, une seule fois,
   accès internet requis — non exécutable dans un environnement sans accès
   réseau, voir docs/limitations.md)
