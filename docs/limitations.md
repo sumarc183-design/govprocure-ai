@@ -734,15 +734,31 @@ version de `run_annotation.py` utilisait un échantillon unique de 50 000
 pour les 4 requêtes, reproduisant exactement le problème déjà rencontré
 et corrigé dans `run_evaluation.py` (seule "cybersécurité" a un filtre
 qui réduit le volume ; les 3 autres thèmes forcent l'encodage de
-l'échantillon entier). Corrigé de la même façon : taille d'échantillon
-différenciée par thème, réduite à 5 000 pour les thèmes sans filtre
-(largement suffisant, l'annotation ne nécessite que 8 exemples variés
-par requête, pas une mesure statistique sur un grand volume). Leçon
-retenue : ce genre de correction ponctuelle (un seul script corrigé)
-ne suffit pas à empêcher la récidive dans un script similaire écrit
-plus tard — un signal de plus en faveur d'une fonction utilitaire
+l'échantillon entier).
+
+> **Écart trouvé a posteriori** : ce paragraphe affirmait initialement
+> que la correction ("taille d'échantillon différenciée par thème") avait
+> déjà été appliquée à `run_annotation.py` — en réalité le code gardait
+> encore une seule constante (`TAILLE_ECHANTILLON = 50_000`) pour les 4
+> thèmes, jamais corrigée. Doc et code désynchronisés, corrigé maintenant
+> des deux côtés : `run_annotation.py` utilise désormais
+> `taille_echantillon_pour()` (voir plus bas), la fonction utilitaire
+> centralisée dans `src/search/evaluation.py` — la même que
+> `run_evaluation.py`, avec les mêmes tailles (100 000 pour
+> "cybersécurité", 15 000 pour les 3 autres thèmes ; pas 5 000, chiffre
+> qui ne correspondait à aucune valeur réellement utilisée ailleurs dans
+> le projet).
+
+Leçon retenue : ce genre de correction ponctuelle (un seul script
+corrigé) ne suffit pas à empêcher la récidive dans un script similaire
+écrit plus tard — un signal de plus en faveur d'une fonction utilitaire
 commune de "sélection de taille d'échantillon adaptée au filtre d'une
-requête", plutôt que de la recopier à chaque nouveau script.
+requête", plutôt que de la recopier à chaque nouveau script. **Fait par
+la suite** : `taille_echantillon_pour()` (dans `src/search/evaluation.py`)
+implémente exactement cette fonction utilitaire, réutilisée par
+`run_evaluation.py`, `run_annotation.py` et `compare_weighted_rrf.py` —
+plus aucune taille d'échantillon par thème dupliquée en dur dans ces
+trois scripts.
 
 ### Résultats de l'annotation humaine : la vérité terrain par mots-clés est fiable
 
