@@ -228,12 +228,15 @@ cause réelle (BM25 aveugle à une simple différence d'accentuation).
 Corriger la cause profite à toutes les requêtes futures contenant des
 mots accentués, pas seulement à ce cas précis de "cybersécurité".
 
-**Alternative encore possible mais non retenue** : centraliser la
-normalisation de texte (accents, casse) dans une fonction unique
+**Alternative envisagée à l'époque, depuis mise en œuvre** : centraliser
+la normalisation de texte (accents, casse) dans une fonction unique
 partagée entre `cleaning.py` (bloc 1) et `bm25_search.py` (bloc 3), pour
-éviter la duplication de logique actuelle. Repoussé pour ne pas
-complexifier la structure du projet à ce stade — à reconsidérer si un
-troisième module a besoin de la même normalisation.
+éviter la duplication de logique. Repoussé initialement pour ne pas
+complexifier la structure du projet à ce stade ; fait par la suite
+(voir plus bas, section "Bug bonus découvert : `procedure` n'a jamais
+été normalisée", mise à jour) une fois qu'un troisième module
+(`prediction`) a effectivement eu besoin de la même normalisation,
+exactement le déclencheur anticipé ici.
 
 ---
 
@@ -541,12 +544,23 @@ nettoyage.
 **Décision** : créer `src/common/text_normalization.py`, un module de
 normalisation partagé — implémente enfin la recommandation n°2 de la
 synthèse finale (centraliser une logique dupliquée 3 fois : bloc 1,
-bloc 3, et maintenant ce bug sur `procedure`). Utilisé pour ce nouveau
-bloc ; **le refactoring des modules existants** (`cleaning.py`,
-`bm25_search.py`) pour réutiliser ce module commun n'a **pas** été fait
-— jugé trop risqué de toucher du code déjà testé et validé si tard dans
-le projet, sans bénéfice fonctionnel immédiat. Centralisation partielle
-assumée : le nouveau code l'utilise, l'ancien reste tel quel.
+bloc 3, et maintenant ce bug sur `procedure`). Dans un premier temps,
+utilisé uniquement pour ce nouveau bloc ; le refactoring des modules
+existants (`cleaning.py`, `bm25_search.py`) avait été repoussé, jugé
+trop risqué de toucher du code déjà testé et validé si tard dans le
+projet, sans bénéfice fonctionnel immédiat.
+
+**Mise à jour (itération suivante)** : la primitive réellement dupliquée
+(le retrait d'accents NFKD, pas la fonction complète
+`normaliser_texte_categorie` qui inclut en plus l'unification des
+apostrophes, spécifique aux catégories) a été extraite dans
+`retirer_accents()`. `cleaning.py::_normalize_text` et
+`bm25_search.py::_normaliser_accents` délèguent maintenant à cette
+fonction commune, sans aucun changement de comportement (même
+algorithme NFKD, mêmes tests de non-régression, toujours au vert) — ce
+qui restait risqué (changer l'algorithme lui-même) n'a pas été touché,
+seule la duplication de code a été supprimée. Centralisation désormais
+complète pour la partie sans risque ; voir aussi `docs/roadmap.md`.
 
 ### Exclusion de données invalides plutôt que flag, ici seulement
 

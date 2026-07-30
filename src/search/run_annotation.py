@@ -48,7 +48,7 @@ def generer():
     print(f"\nFichier généré : {CHEMIN_FICHIER}")
     print("Ouvre-le (Excel, LibreOffice, ou un éditeur de texte) et remplis la")
     print("colonne 'pertinent' avec 0 ou 1 pour chaque ligne, en lisant l'objet.")
-    print(f"Puis relance : python -m src.search.run_annotation --comparer")
+    print("Puis relance : python -m src.search.run_annotation --comparer")
 
 
 def comparer():
