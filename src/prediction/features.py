@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.anomaly.features import add_cpv_division
+from src.anomaly.features import add_cpv_division, deduplicate_marches
 from src.common.text_normalization import normaliser_texte_categorie
 
 COLONNES_REQUISES = [
@@ -73,9 +73,10 @@ def preparer_donnees_completes(df: pd.DataFrame) -> pd.DataFrame:
 
     1. Filtrer la cible valide (avant tout le reste, pas la peine de
        traiter des lignes qu'on va de toute façon exclure).
-    2. Dédupliquer par marché (leçon du bloc 1, réappliquée ici pour la
-       4e fois — voir docs/decisions.md sur la centralisation à
-       envisager).
+    2. Dédupliquer par marché via `deduplicate_marches` (module anomalies),
+       plutôt que de dupliquer à nouveau la même ligne de code ici — leçon
+       du bloc 1, déjà réappliquée 3 fois ailleurs dans le projet (voir
+       docs/decisions.md).
     3. Normaliser les catégories textuelles (procedure, nature) via le
        module commun — corrige au passage un bug jamais traité sur
        `procedure` (16 valeurs distinctes, 11 réelles une fois
@@ -85,7 +86,7 @@ def preparer_donnees_completes(df: pd.DataFrame) -> pd.DataFrame:
        2 chiffres donne des groupes fiables).
     """
     df = filtrer_cible_valide(df)
-    df = df.drop_duplicates(subset="uid", keep="first").copy()
+    df = deduplicate_marches(df)
 
     df["procedure_normalisee"] = df["procedure"].apply(normaliser_texte_categorie)
     df["nature_normalisee"] = df["nature"].apply(normaliser_texte_categorie)

@@ -10,22 +10,27 @@ Nécessite le modèle d'embeddings (accès internet la première fois).
 
 from src.quality.loader import load_current_only
 from src.search.engine import search
-from src.search.evaluation import REQUETES_TEST_DIFFICILES, evaluer_requete
-
-TAILLE_ECHANTILLON = 15_000  # cohérent avec run_evaluation.py pour ce thème
+from src.search.evaluation import (
+    REQUETES_TEST_DIFFICILES,
+    evaluer_requete,
+    taille_echantillon_pour,
+)
 
 
 def main():
+    requete_test = next(
+        rt for rt in REQUETES_TEST_DIFFICILES if rt.nom == "travaux_voirie_difficile"
+    )
+
     df = load_current_only(
         "data/raw/decp.parquet",
         columns=["uid", "objet", "montant", "acheteur_region_nom"],
     )
     df = df.dropna(subset=["objet"])
-    sample = df.sample(n=TAILLE_ECHANTILLON, random_state=42)
-
-    requete_test = next(
-        rt for rt in REQUETES_TEST_DIFFICILES if rt.nom == "travaux_voirie_difficile"
-    )
+    # Taille centralisée dans evaluation.py, partagée avec run_evaluation.py
+    # (au lieu d'une constante dupliquée ici, qui pouvait se désynchroniser
+    # silencieusement si l'une des deux valeurs changeait sans l'autre).
+    sample = df.sample(n=taille_echantillon_pour(requete_test.nom), random_state=42)
 
     print(f"Requête : {requete_test.requete}")
     print()

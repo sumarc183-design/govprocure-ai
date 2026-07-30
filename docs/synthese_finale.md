@@ -102,14 +102,15 @@ et documenté plutôt qu'ignoré.
    couvrant l'intégralité du corpus (1,73M marchés), qui nécessiterait un
    calcul batch d'environ 14h sur cette machine sans GPU — hors
    périmètre réalisé, mais chemin clair pour la suite.
-2. ✅ **Fait (partiellement) — Centraliser la normalisation.** Un module
-   commun (`src/common/text_normalization.py`) a été créé après avoir
-   trouvé un 4e cas du même problème (`procedure`, jamais normalisée).
-   Utilisé pour le nouveau code (bloc prédiction). Reste non fait : migrer
-   les modules existants (`cleaning.py`, `bm25_search.py`) pour qu'ils
-   réutilisent ce module plutôt que leur propre logique dupliquée — repoussé
-   par prudence (code déjà testé et validé, risque de régression jugé
-   supérieur au bénéfice à ce stade avancé du projet).
+2. ✅ **Fait — Centraliser la normalisation.** Un module commun
+   (`src/common/text_normalization.py`) a été créé après avoir trouvé un
+   4e cas du même problème (`procedure`, jamais normalisée), d'abord
+   utilisé uniquement pour le nouveau code (bloc prédiction). **Mise à
+   jour** : la primitive réellement dupliquée (le retrait d'accents NFKD)
+   a depuis été extraite (`retirer_accents()`) et est maintenant réutilisée
+   par `cleaning.py` et `bm25_search.py` aussi, sans changement de
+   comportement (mêmes tests de non-régression, toujours au vert) — voir
+   docs/decisions.md.
 3. **Tester un modèle d'embeddings plus grand** pour les cas où le modèle
    léger actuel échoue (ex: "espaces verts"), en évaluant le compromis
    avec le temps de calcul supplémentaire.
