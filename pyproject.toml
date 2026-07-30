@@ -1,4 +1,20 @@
--r requirements.txt
-playwright==1.48.0
-ruff==0.15.8
-mypy==1.19.1
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# Règles activées volontairement limitées à ce qui attrape des bugs réels
+# (imports/variables inutilisés, f-strings sans placeholder, bugs classiques
+# pyflakes) plutôt qu'une configuration de style exhaustive — cohérent avec
+# le reste du projet (pragmatique, pas de complexité ajoutée sans bénéfice
+# mesuré).
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # ligne trop longue : déjà couvert en pratique par line-length, non bloquant
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
