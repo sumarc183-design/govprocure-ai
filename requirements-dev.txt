@@ -1,4 +1,4 @@
 -r requirements.txt
 playwright==1.48.0
-ruff==0.15.8
+ruff==0.16.0
 mypy==1.19.1
