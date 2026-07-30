@@ -202,6 +202,43 @@ REQUETES_TEST_DIFFICILES = [
 ]
 
 
+# Taille d'échantillon brut adaptée par thème, centralisée ici pour être
+# réutilisée par tous les scripts qui échantillonnent sur ces mêmes thèmes
+# (run_evaluation.py, run_annotation.py, compare_weighted_rrf.py).
+#
+# Pourquoi une taille différente par thème plutôt qu'une taille unique :
+# seul le thème "cybersécurité" a un filtre strict (région + montant) qui
+# réduit le volume avant tout calcul coûteux (BM25/embeddings) — il a donc
+# besoin d'un grand échantillon brut (100 000) pour garder assez de
+# candidats après filtrage. Les 3 autres thèmes n'ont aucun filtre strict
+# (rien n'est réduit par apply_strict_filters) et sont des thèmes courants
+# du corpus (des milliers de marchés pertinents) : un échantillon plus
+# petit (15 000) suffit largement et évite d'encoder inutilement des
+# dizaines de milliers de textes à chaque requête.
+#
+# Ce problème de lenteur (~20-30 minutes avec une taille unique de 100 000)
+# a été découvert et corrigé deux fois indépendamment (run_evaluation.py
+# d'abord, puis le même bug reproduit dans run_annotation.py) avant d'être
+# enfin centralisé ici — voir docs/limitations.md, qui notait déjà ce
+# risque de récidive tant que la logique restait recopiée script par
+# script plutôt que partagée.
+TAILLE_ECHANTILLON_PAR_THEME = {
+    "cybersecurite": 100_000,
+    "travaux_voirie": 15_000,
+    "restauration_scolaire": 15_000,
+    "espaces_verts": 15_000,
+}
+
+
+def taille_echantillon_pour(nom_requete: str, defaut: int = 15_000) -> int:
+    """Retrouve la taille d'échantillon adaptée à un thème, que la requête
+    soit sa version "facile" ou "difficile" (suffixe `_difficile` retiré
+    avant la recherche dans TAILLE_ECHANTILLON_PAR_THEME).
+    """
+    theme = nom_requete.replace("_difficile", "")
+    return TAILLE_ECHANTILLON_PAR_THEME.get(theme, defaut)
+
+
 def evaluer_requete(
     df_resultats: pd.DataFrame,
     requete_test: RequeteTest,

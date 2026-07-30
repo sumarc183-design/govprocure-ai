@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.anomaly.features import deduplicate_marches
 from src.search.bm25_search import BM25Index
 from src.search.embeddings_search import EmbeddingIndex
 from src.search.filters import ParsedQuery, parse_query
@@ -31,14 +32,14 @@ def apply_strict_filters(df: pd.DataFrame, parsed: ParsedQuery) -> pd.DataFrame:
     des marchés en Île-de-France, pas du dataset entier) — plus pertinent
     qu'un seuil absolu qui ignorerait le contexte régional/sectoriel.
 
-    Déduplication par `uid` (garde la première ligne) : cohérent avec la
-    découverte du bloc 1 (un même marché peut avoir plusieurs lignes,
-    une par titulaire, en cas de cotraitance/accord-cadre multi-attributaire
-    — voir docs/decisions.md). Sans cette déduplication, un utilisateur
-    verrait le même marché apparaître plusieurs fois à l'identique dans
-    les résultats de recherche, ce qui dégrade l'expérience alors que la
-    pertinence de recherche (objet, montant, région) est identique pour
-    toutes ces lignes.
+    Déduplication par `uid` (via `deduplicate_marches`, module anomalies) :
+    cohérent avec la découverte du bloc 1 (un même marché peut avoir
+    plusieurs lignes, une par titulaire, en cas de cotraitance/accord-cadre
+    multi-attributaire — voir docs/decisions.md). Sans cette déduplication,
+    un utilisateur verrait le même marché apparaître plusieurs fois à
+    l'identique dans les résultats de recherche, ce qui dégrade l'expérience
+    alors que la pertinence de recherche (objet, montant, région) est
+    identique pour toutes ces lignes.
     """
     result = df.copy()
 
@@ -51,10 +52,7 @@ def apply_strict_filters(df: pd.DataFrame, parsed: ParsedQuery) -> pd.DataFrame:
         seuil = result["montant"].quantile(0.90)
         result = result[result["montant"] >= seuil]
 
-    if "uid" in result.columns:
-        result = result.drop_duplicates(subset="uid", keep="first")
-
-    return result
+    return deduplicate_marches(result)
 
 
 def search(

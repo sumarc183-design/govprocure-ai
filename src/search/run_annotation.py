@@ -12,6 +12,15 @@ ligne), relancer avec --comparer pour voir le taux d'accord avec la
 vérité terrain par mots-clés :
 
     python -m src.search.run_annotation --comparer
+
+Taille d'échantillon différenciée par thème (voir
+`src.search.evaluation.TAILLE_ECHANTILLON_PAR_THEME`) : ce script tirait
+initialement un échantillon unique de 50 000 pour les 4 requêtes, ce qui
+reproduisait le même problème de lenteur déjà rencontré et corrigé dans
+run_evaluation.py (seule "cybersécurité" a un filtre qui réduit le
+volume ; les 3 autres thèmes forcent l'encodage de l'échantillon
+entier). Corrigé en réutilisant la même fonction centralisée que
+run_evaluation.py, plutôt que de recopier une nouvelle fois la logique.
 """
 
 import sys
@@ -23,10 +32,9 @@ from src.search.annotation import (
     generer_fichier_annotation,
 )
 from src.search.engine import search
-from src.search.evaluation import REQUETES_TEST
+from src.search.evaluation import REQUETES_TEST, taille_echantillon_pour
 
 CHEMIN_FICHIER = "annotation_a_remplir.csv"
-TAILLE_ECHANTILLON = 50_000
 TOP_K = 8
 
 
@@ -36,10 +44,10 @@ def generer():
         columns=["uid", "objet", "montant", "acheteur_region_nom"],
     )
     df = df.dropna(subset=["objet"])
-    sample = df.sample(n=TAILLE_ECHANTILLON, random_state=42)
 
     resultats_par_requete = {}
     for rt in REQUETES_TEST:
+        sample = df.sample(n=min(taille_echantillon_pour(rt.nom), len(df)), random_state=42)
         result, _ = search(sample, rt.requete, top_k=TOP_K)
         resultats_par_requete[rt.nom] = result
         print(f"  {rt.nom}: {len(result)} résultats")

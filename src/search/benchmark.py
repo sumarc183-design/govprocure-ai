@@ -20,6 +20,7 @@ déjà notée comme piste dans docs/limitations.md, ce benchmark permet de
 la chiffrer concrètement plutôt que de rester une intuition.
 """
 
+import os
 import time
 
 from src.quality.loader import load_current_only
@@ -92,7 +93,6 @@ def main():
     print("=" * 60)
     sample = df.sample(n=min(100_000, len(df)), random_state=42)
     chemin_cache = "data/processed/embeddings_cache_demo.npz"
-    import os
     if os.path.exists(chemin_cache):
         os.remove(chemin_cache)  # partir d'un cache vide pour la démo
 
