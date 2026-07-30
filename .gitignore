@@ -20,6 +20,7 @@ data/processed/*
 .DS_Store
 .vscode/
 .idea/
+.claude/
 
 # Env
 .env
