@@ -104,6 +104,17 @@ playwright install chromium
 pytest tests/test_dashboard_functional.py -v
 ```
 
+## Qualité de code
+
+Lint (`ruff`) et vérification de types (`mypy`) tournent en CI dans un job
+séparé des tests (voir `.github/workflows/tests.yml`), pour reproduire en local :
+
+```bash
+pip install ruff mypy
+ruff check src/ tests/
+mypy --ignore-missing-imports src/
+```
+
 ## Documentation complète
 
 - [**Synthèse finale**](docs/synthese_finale.md) — vue d'ensemble : ce qui fonctionne, les limites, les recommandations production

@@ -15,10 +15,12 @@ combler.
 from __future__ import annotations
 
 import re
-import unicodedata
 
 import pandas as pd
 from rank_bm25 import BM25Okapi
+
+from src.common.text_normalization import retirer_accents
+
 
 def _normaliser_accents(text: str) -> str:
     """Retire les accents (é -> e, à -> a, etc.).
@@ -30,9 +32,11 @@ def _normaliser_accents(text: str) -> str:
     brute) sont deux tokens différents pour BM25 — trouvé concrètement
     en testant sur données réelles (voir docs/limitations.md). Même
     principe que la normalisation de `nature` dans le bloc 1
-    (cleaning.py), réappliqué ici pour la même raison.
+    (cleaning.py), réappliqué ici pour la même raison — les deux modules
+    délèguent maintenant à la même primitive partagée (voir
+    `src/common/text_normalization.py::retirer_accents`).
     """
-    return unicodedata.normalize("NFKD", text).encode("ascii", errors="ignore").decode("ascii")
+    return retirer_accents(text)
 
 
 # Mots vides français basiques à ignorer (liste courte et pragmatique,

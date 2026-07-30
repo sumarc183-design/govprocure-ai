@@ -367,10 +367,13 @@ leçons du bloc 1 (normalisation casse/accents, déduplication par marché)
 ont dû être réappliquées indépendamment dans le bloc 3, dans deux
 modules différents. Signal clair qu'il faudrait à terme centraliser ces
 normalisations de texte dans une fonction commune partagée entre
-`cleaning.py` et `bm25_search.py`, plutôt que de dupliquer la logique —
-amélioration à considérer si un bloc 6 ou une refactorisation est
-envisagée, non prioritaire tant que les deux implémentations restent
-cohérentes et testées séparément.
+`cleaning.py` et `bm25_search.py`, plutôt que de dupliquer la logique.
+
+> **Fait par la suite** : voir plus bas ("Bug bonus corrigé en marge",
+> bloc prédiction) pour la création du module partagé, puis sa mise à
+> jour finale : `cleaning.py` et `bm25_search.py` délèguent maintenant
+> tous les deux à la même primitive `retirer_accents()`, sans
+> changement de comportement.
 
 ### Confirmation finale : pipeline complet (BM25 + embeddings + RRF)
 
@@ -884,10 +887,16 @@ tant que tel.
 normalisée (16 valeurs se réduisent à 11 après correction — même
 problème que `nature` au bloc 1, jamais traité sur ce champ). Corrigé
 via un nouveau module de normalisation partagé
-(`src/common/text_normalization.py`), qui centralise enfin une logique
-dupliquée 3 fois dans le projet — mais seulement pour le nouveau code :
-les modules existants (`cleaning.py`, `bm25_search.py`) n'ont pas été
-retouchés, jugé trop risqué à ce stade du projet.
+(`src/common/text_normalization.py`).
+
+**Itération suivante** : la centralisation, initialement partielle (le
+nouveau code utilisait le module commun, `cleaning.py` et
+`bm25_search.py` gardaient leur propre copie de la logique de retrait
+d'accents), a été complétée en isolant la partie sans risque de la
+duplication — le retrait d'accents NFKD lui-même, identique dans les
+trois endroits — dans une fonction `retirer_accents()` réutilisée
+partout. Comportement inchangé (mêmes tests de non-régression, toujours
+au vert) ; seule la duplication de code a disparu.
 
 ## Aller plus loin sur la prédiction : validation croisée et hyperparamètres
 
