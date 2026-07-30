@@ -7,4 +7,4 @@ sentence-transformers==5.6.1
 streamlit==1.60.0
 openpyxl==3.1.5
 pytest==9.1.1
-requests==2.33.1
+requests==2.34.2
