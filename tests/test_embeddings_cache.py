@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from src.search.embeddings_search import (
     charger_cache_embeddings,

@@ -33,7 +33,7 @@ REQUETE_BENCHMARK = "marchés de cybersécurité en Île-de-France de montant é
 
 def mesurer(label: str, fonction) -> float:
     t0 = time.perf_counter()
-    resultat = fonction()
+    fonction()
     duree = time.perf_counter() - t0
     print(f"  {label:<40} {duree:>8.3f} s")
     return duree

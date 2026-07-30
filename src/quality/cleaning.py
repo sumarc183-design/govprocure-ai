@@ -10,10 +10,9 @@ que de perdre l'information.
 
 from __future__ import annotations
 
-import unicodedata
-
 import pandas as pd
 
+from src.common.text_normalization import retirer_accents
 from src.quality.audit import DATE_MAX_PLAUSIBLE, DATE_MIN_PLAUSIBLE, MONTANT_MAX_PLAUSIBLE
 
 
@@ -22,8 +21,7 @@ def _normalize_text(value: str) -> str:
     if not isinstance(value, str):
         return value
     value = value.strip().lower()
-    value = unicodedata.normalize("NFKD", value)
-    value = value.encode("ascii", errors="ignore").decode("ascii")
+    value = retirer_accents(value)
     return value
 
 

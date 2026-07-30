@@ -21,6 +21,18 @@ from __future__ import annotations
 import unicodedata
 
 
+def retirer_accents(texte: str) -> str:
+    """Retire les accents d'un texte (NFKD : décompose "é" en "e" + accent,
+    puis ne garde que les caractères ASCII).
+
+    Primitive partagée par `normaliser_texte_categorie` ci-dessous, ainsi
+    que par `src/quality/cleaning.py` et `src/search/bm25_search.py`, qui
+    dupliquaient chacun cette même transformation (voir docs/decisions.md,
+    "recommandation n°2" — centralisation restée partielle jusqu'ici).
+    """
+    return unicodedata.normalize("NFKD", texte).encode("ascii", errors="ignore").decode("ascii")
+
+
 def normaliser_texte_categorie(texte: str) -> str:
     """Normalise une valeur catégorielle textuelle pour la comparaison/le
     regroupement : minuscules, sans accents, apostrophes unifiées, espaces
@@ -42,9 +54,8 @@ def normaliser_texte_categorie(texte: str) -> str:
     # deux catégories différentes malgré la normalisation d'accents.
     texte = texte.replace("’", "'")
 
-    # Retirer les accents (NFKD : décompose "é" en "e" + accent, puis on
-    # ne garde que les caractères ASCII).
-    texte = unicodedata.normalize("NFKD", texte).encode("ascii", errors="ignore").decode("ascii")
+    # Retirer les accents (voir retirer_accents ci-dessus).
+    texte = retirer_accents(texte)
 
     # Après suppression des accents, l'apostrophe droite est déjà
     # préservée par l'encodage ascii (elle est déjà ASCII). Normaliser le

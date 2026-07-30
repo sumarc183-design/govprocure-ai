@@ -90,7 +90,6 @@ def test_validation_croisee_plis_disjoints(petit_dataset):
     """Vérifie que chaque marché n'apparaît qu'une seule fois en test
     sur l'ensemble des plis (propriété fondamentale du K-fold).
     """
-    from sklearn.linear_model import Ridge
     from sklearn.model_selection import KFold
 
     from src.prediction.models import RANDOM_STATE
@@ -123,8 +122,6 @@ def test_r2_espace_reel_identique_a_r2_score_sur_donnees_non_transformees():
     """Vérifie que _r2_espace_reel calcule bien un R² après reconversion
     expm1, pas juste un alias du R² standard.
     """
-    from sklearn.metrics import r2_score
-
     from src.prediction.models import _r2_espace_reel
 
     y_true_log = np.array([0.0, 1.0, 2.0])  # log1p(0)=0, correspond à des vraies valeurs 0, e-1, e²-1
@@ -139,8 +136,9 @@ def test_scorer_espace_reel_utilise_par_defaut(petit_dataset):
     scorer en espace réel par défaut, suite à la découverte qu'optimiser
     en espace log peut sélectionner un modèle moins bon en réel.
     """
-    from src.prediction.models import SCORER_ESPACE_REEL, rechercher_hyperparametres
     import inspect
+
+    from src.prediction.models import SCORER_ESPACE_REEL, rechercher_hyperparametres
 
     signature = inspect.signature(rechercher_hyperparametres)
     assert signature.parameters["scoring"].default is SCORER_ESPACE_REEL

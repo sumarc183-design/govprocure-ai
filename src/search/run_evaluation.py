@@ -31,8 +31,8 @@ thèmes sur 4).
 from src.quality.loader import load_current_only
 from src.search.bm25_search import BM25Index
 from src.search.engine import apply_strict_filters, search
-from src.search.filters import parse_query
 from src.search.evaluation import REQUETES_TEST, REQUETES_TEST_DIFFICILES, evaluer_requete
+from src.search.filters import parse_query
 
 TAILLE_ECHANTILLON_PAR_THEME = {
     "cybersecurite": 100_000,
