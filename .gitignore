@@ -25,8 +25,9 @@ data/processed/*
 # Env
 .env
 
-# Cache pytest
+# Cache pytest / mypy
 .pytest_cache/
+.mypy_cache/
 
 # Captures de diagnostic des tests dashboard (artefacts de debug temporaires,
 # régénérés à chaque échec de test_dashboard_functional.py, pas destinés à
