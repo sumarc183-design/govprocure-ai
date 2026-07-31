@@ -63,6 +63,7 @@ def search(
     embedding_candidates: int = 200,
     cache_embeddings_path: str | None = "data/processed/embeddings_cache.npz",
     poids_fusion: tuple[float, float] | None = None,
+    embedding_model_name: str | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Exécute le pipeline de recherche hybride complet.
 
@@ -87,6 +88,11 @@ def search(
     la fusion à poids égal a dégradé un résultat BM25 correct par
     coïncidence — voir docs/decisions.md pour le résultat empirique de
     la comparaison.
+
+    embedding_model_name : None (par défaut) = MiniLM (voir
+    embeddings_search._MODEL_NAME), comportement d'origine inchangé.
+    Permet de tester un modèle d'embeddings plus grand (voir
+    compare_embedding_models.py) sans dupliquer le pipeline complet.
     """
     parsed = parse_query(query)
     df_filtre = apply_strict_filters(df, parsed)
@@ -106,7 +112,10 @@ def search(
     bm25_index = BM25Index(df_filtre)
     ranking_bm25 = bm25_index.search(parsed.texte_libre, top_k=bm25_candidates)
 
-    embedding_index = EmbeddingIndex(df_filtre, cache_path=cache_embeddings_path)
+    embedding_index_kwargs = {"cache_path": cache_embeddings_path}
+    if embedding_model_name is not None:
+        embedding_index_kwargs["model_name"] = embedding_model_name
+    embedding_index = EmbeddingIndex(df_filtre, **embedding_index_kwargs)
     ranking_embeddings = embedding_index.search(
         parsed.texte_libre, top_k=embedding_candidates
     )

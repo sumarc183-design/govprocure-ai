@@ -3,9 +3,18 @@ Génère le fichier CSV à annoter manuellement (voir src/search/annotation.py).
 
 Lancement : python -m src.search.run_annotation
 
-Produit annotation_a_remplir.csv à la racine du projet, avec les 8
+Produit annotation_a_remplir.csv à la racine du projet, avec les 20
 premiers résultats du pipeline complet pour chacune des 4 requêtes de
-test "faciles" (32 lignes au total — proche des 20-30 lignes suggérées).
+test "faciles" (80 lignes au total).
+
+Extension au-delà de l'annotation initiale (32 lignes, TOP_K=8) — voir
+docs/limitations.md, "Non fait, pour aller plus loin" : TOP_K passé à
+20 pour couvrir plus de profondeur par thème (jusqu'au rang 20 plutôt
+que 8 seulement), sur la même méthodologie déjà validée (lecture de
+chaque `objet`, jugement proposé puis relu). Reste volontairement sur
+les 4 requêtes "faciles" (pas les difficiles) pour garder un volume de
+lecture manuelle raisonnable — voir docs/limitations.md pour la
+discussion de ce compromis de portée.
 
 Une fois le fichier rempli (colonne `pertinent` = 0 ou 1 pour chaque
 ligne), relancer avec --comparer pour voir le taux d'accord avec la
@@ -35,7 +44,7 @@ from src.search.engine import search
 from src.search.evaluation import REQUETES_TEST, taille_echantillon_pour
 
 CHEMIN_FICHIER = "annotation_a_remplir.csv"
-TOP_K = 8
+TOP_K = 20
 
 
 def generer():

@@ -22,6 +22,18 @@ sur les 1,73M marchés uniques du corpus complet nécessiterait un calcul
 batch (potentiellement des heures sur une machine sans GPU, mesuré
 proportionnellement à partir du benchmark existant) et un index dédié
 (FAISS/Qdrant), pas juste un fichier cache — voir docs/decisions.md.
+Prototype d'un vrai index FAISS : voir src/search/faiss_index.py et
+src/search/build_faiss_index.py.
+
+Modèle configurable (model_name) : ajouté pour comparer MiniLM à un
+modèle plus grand (voir src/search/compare_embedding_models.py), suite
+à la limite observée au bloc 5 (docs/limitations.md) sur le thème
+"espaces verts", où MiniLM ne capture pas la proximité sémantique entre
+"maintenance des parcs municipaux" et "espaces verts"/"tonte"/"élagage".
+Le cache de modèles est maintenant un dict par nom (plutôt qu'une seule
+variable globale) pour permettre de garder plusieurs modèles chargés en
+mémoire simultanément le temps d'une comparaison, sans recharger le
+modèle par défaut à chaque bascule.
 """
 
 from __future__ import annotations
@@ -33,15 +45,17 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 
 _MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
-_model_cache: SentenceTransformer | None = None
+_model_cache: dict[str, SentenceTransformer] = {}
 
 
-def _get_model() -> SentenceTransformer:
-    """Charge le modèle une seule fois par process (coûteux à recharger)."""
-    global _model_cache
-    if _model_cache is None:
-        _model_cache = SentenceTransformer(_MODEL_NAME)
-    return _model_cache
+def _get_model(model_name: str = _MODEL_NAME) -> SentenceTransformer:
+    """Charge le modèle une seule fois par process et par nom (coûteux à
+    recharger) — un dict plutôt qu'une seule variable globale pour ne pas
+    perdre le modèle par défaut déjà chargé quand on en teste un autre.
+    """
+    if model_name not in _model_cache:
+        _model_cache[model_name] = SentenceTransformer(model_name)
+    return _model_cache[model_name]
 
 
 def charger_cache_embeddings(chemin: str | Path) -> dict[str, np.ndarray]:
@@ -84,6 +98,13 @@ class EmbeddingIndex:
     calculés pour les marchés déjà rencontrés (identifiés par `uid`), et
     n'encode que les nouveaux. Le cache est mis à jour et sauvegardé à
     chaque appel — il grossit au fil des recherches successives.
+
+    model_name (optionnel) : nom du modèle sentence-transformers à
+    utiliser (défaut : MiniLM, voir _MODEL_NAME). Un cache_path donné
+    avec un model_name différent du défaut mélangerait des vecteurs
+    incomparables (dimensions/espace différents selon le modèle) — à
+    utiliser avec un cache_path dédié par modèle, jamais partagé entre
+    modèles différents (voir compare_embedding_models.py).
     """
 
     def __init__(
@@ -92,11 +113,13 @@ class EmbeddingIndex:
         text_column: str = "objet",
         cache_path: str | Path | None = None,
         id_column: str = "uid",
+        model_name: str = _MODEL_NAME,
     ):
         self.df = df.reset_index(drop=True)
         self.text_column = text_column
         self.cache_path = cache_path
-        model = _get_model()
+        self.model_name = model_name
+        model = _get_model(model_name)
 
         if cache_path is not None and id_column in self.df.columns:
             cache = charger_cache_embeddings(cache_path)
@@ -132,7 +155,7 @@ class EmbeddingIndex:
         if not query.strip():
             return self.df.iloc[0:0].copy()
 
-        model = _get_model()
+        model = _get_model(self.model_name)
         query_embedding = model.encode([query], normalize_embeddings=True)[0]
 
         scores = self.embeddings @ query_embedding  # produit scalaire = cosinus ici
