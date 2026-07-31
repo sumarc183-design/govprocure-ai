@@ -802,6 +802,70 @@ résultats BM25 du bloc 3) soit annulé — cette annotation valide la
 l'absence de biais dans sa *construction* (comment les mots-clés ont
 été choisis).
 
+### Extension de l'annotation à 80 exemples : un vrai bug trouvé, pas juste une limite de vocabulaire
+
+**Ce qui a été fait** : annotation manuelle étendue de 32 à 80 exemples
+(20 par thème au lieu de 8), même méthodologie (jugement en lisant
+chaque `objet`, proposé puis relu et validé). Fichier régénéré via
+`python -m src.search.run_annotation` (original à 32 lignes conservé
+dans `annotation_a_remplir_32lignes_original.csv`), comparé via
+`python -m src.search.run_annotation --comparer`.
+
+**Résultat, avant correction du bug ci-dessous** :
+
+| Requête | Taux d'accord | Faux positifs mots-clés | Faux négatifs |
+|---|---|---|---|
+| cybersécurité | 75% | 0 | 5 |
+| travaux de voirie | 100% | 0 | 0 |
+| restauration scolaire | 80% | 4 | 0 |
+| espaces verts | 100% | 0 | 0 |
+
+**Restauration scolaire** : les 4 faux positifs confirment, à plus
+grande échelle, exactement le même pattern que le seul cas trouvé sur 32
+exemples (construction/rénovation d'une cantine classée pertinente par
+mot-clé "cantine"/"restauration scolaire" alors que c'est un marché de
+bâtiment, pas de service de restauration) — pas une découverte nouvelle,
+une confirmation.
+
+**Cybersécurité, une vraie régression (100% sur 8 exemples -> 75% sur
+20) qui a mené à trouver un bug** : investigation des 5 faux négatifs —
+3 d'entre eux sont des marchés dont l'objet contient littéralement
+"SECURITE DES SYSTEMES D'INFORMATION" (donc évidemment pertinents), mais
+classés non pertinents par la vérité terrain. Cause : `_normaliser()`
+(`src/search/evaluation.py`) utilisait NFKD + encodage ASCII pour retirer
+les accents, mais l'apostrophe typographique (`’`, U+2019) n'est pas
+décomposée par NFKD — elle était donc silencieusement **supprimée**
+plutôt que remplacée par un espace, collant les mots :
+`"D’INFORMATION"` devenait `"dinformation"` au lieu de `"d information"`,
+ce qui cassait le matching avec le mot-clé `"securite des systemes d
+information"` (qui contient un espace à cet endroit). Les 2 faux
+négatifs restants sont un vrai écart de vocabulaire (ex : "solutions de
+sécurité... audit de sécurité", sans la phrase exacte) — pas liés au
+bug.
+
+**Corrigé** : `_normaliser()` remplace maintenant l'apostrophe (droite et
+typographique) par un espace avant l'encodage ASCII, avec un test de
+non-régression dédié (`test_est_pertinent_apostrophe_typographique_ne_colle_pas_les_mots`
+dans `tests/test_evaluation.py`). Après correction : cybersécurité passe
+de 75% à **85%** d'accord (5 -> 3 faux négatifs, les 3 corrigés étant
+bien ceux liés à l'apostrophe).
+
+**Portée du bug, assumée honnêtement** : `_normaliser()` est utilisée par
+`est_pertinent()`, donc par toutes les métriques Precision@K/NDCG
+calculées dans ce projet (blocs 3 et 5, comparaison RRF pondérée,
+comparaison de modèles d'embeddings) — pas seulement par cette
+annotation. Le bug ne touche que les mots-clés de vérité terrain
+contenant une expression avec espace suivie d'une apostrophe
+typographique dans le texte réel (concrètement : seul le mot-clé
+cybersécurité "securite des systemes d information" est dans ce cas
+parmi tous les mots-clés du projet — voir la liste dans
+`REQUETES_TEST`). Les tableaux Precision@K/NDCG déjà documentés plus
+haut pour le thème cybersécurité ont donc pu très légèrement
+sous-compter les vrais positifs à cause de ce bug (pas re-mesurés après
+correction, faute de temps pour relancer tous les scripts concernés) ;
+les 3 autres thèmes (voirie, restauration, espaces verts) n'utilisent
+aucun mot-clé avec ce motif et ne sont pas concernés.
+
 ## Itération post-bloc 5 : cache disque des embeddings
 
 **Ce qui a été fait** : `EmbeddingIndex` accepte maintenant un

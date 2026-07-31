@@ -29,9 +29,19 @@ def _normaliser(text: str) -> str:
     """Même normalisation (minuscules, sans accents) que bm25_search.py,
     pour que la vérité terrain et le moteur de recherche jugent le texte
     de la même façon.
+
+    Bug trouvé lors de l'extension de l'annotation manuelle à 80 exemples :
+    l'apostrophe typographique (’, U+2019) n'est pas décomposée par NFKD et
+    était donc silencieusement supprimée par l'encodage ASCII, collant les
+    mots ("D’INFORMATION" -> "dinformation" au lieu de "d information") et
+    cassant le matching avec des mots-clés contenant un espace à cet
+    endroit ("securite des systemes d information"). Remplacée par un
+    espace avant l'encodage pour que les deux formes convergent vers la
+    même chaîne normalisée.
     """
-    text = text.lower()
-    return unicodedata.normalize("NFKD", text).encode("ascii", errors="ignore").decode("ascii")
+    text = text.lower().replace("’", " ").replace("'", " ")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", errors="ignore").decode("ascii")
+    return " ".join(text.split())
 
 
 def est_pertinent(objet: str, mots_cles: list[str]) -> bool:

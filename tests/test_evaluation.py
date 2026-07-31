@@ -17,6 +17,20 @@ def test_est_pertinent_insensible_accents_casse():
     assert not est_pertinent("Travaux de voirie", ["cybersécurité"])
 
 
+def test_est_pertinent_apostrophe_typographique_ne_colle_pas_les_mots():
+    """Bug trouvé lors de l'annotation manuelle à 80 exemples : l'apostrophe
+    typographique (’) était supprimée sans être remplacée par un espace,
+    collant "d'information" en "dinformation" et cassant le match avec un
+    mot-clé contenant un espace à cet endroit.
+    """
+    assert est_pertinent(
+        "SECURITE DES SYSTEMES D’INFORMATION", ["securite des systemes d information"]
+    )
+    assert est_pertinent(
+        "Sécurité des systèmes d'information", ["securite des systemes d information"]
+    )
+
+
 def test_precision_at_k_cas_parfait():
     objets = ["sécurité informatique A", "sécurité informatique B", "travaux voirie"]
     # 2 pertinents sur les 2 premiers -> precision@2 = 1.0
