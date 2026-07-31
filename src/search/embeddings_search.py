@@ -39,6 +39,7 @@ modèle par défaut à chaque bascule.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -79,7 +80,7 @@ def sauver_cache_embeddings(cache: dict[str, np.ndarray], chemin: str | Path) ->
     """
     chemin = Path(chemin)
     chemin.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(chemin, **cache)
+    np.savez(chemin, **cast(dict[str, Any], cache))
 
 
 def identifier_uids_manquants(uids: list[str], cache: dict[str, np.ndarray]) -> list[str]:
