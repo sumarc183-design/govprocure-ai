@@ -112,10 +112,12 @@ def search(
     bm25_index = BM25Index(df_filtre)
     ranking_bm25 = bm25_index.search(parsed.texte_libre, top_k=bm25_candidates)
 
-    embedding_index_kwargs = {"cache_path": cache_embeddings_path}
     if embedding_model_name is not None:
-        embedding_index_kwargs["model_name"] = embedding_model_name
-    embedding_index = EmbeddingIndex(df_filtre, **embedding_index_kwargs)
+        embedding_index = EmbeddingIndex(
+            df_filtre, cache_path=cache_embeddings_path, model_name=embedding_model_name
+        )
+    else:
+        embedding_index = EmbeddingIndex(df_filtre, cache_path=cache_embeddings_path)
     ranking_embeddings = embedding_index.search(
         parsed.texte_libre, top_k=embedding_candidates
     )

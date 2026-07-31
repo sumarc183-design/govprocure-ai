@@ -51,6 +51,7 @@ class FaissEmbeddingIndex:
         self.embeddings = np.ascontiguousarray(embeddings, dtype="float32")
         dim = self.embeddings.shape[1]
 
+        self.index: faiss.Index
         if use_ivf and len(self.embeddings) >= nlist * 40:
             quantizer = faiss.IndexFlatIP(dim)
             self.index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
@@ -79,7 +80,9 @@ class FaissEmbeddingIndex:
         faiss.write_index(self.index, str(chemin))
 
 
-def recherche_bruteforce(embeddings: np.ndarray, query_embedding: np.ndarray, top_k: int = 50) -> np.ndarray:
+def recherche_bruteforce(
+    embeddings: np.ndarray, query_embedding: np.ndarray, top_k: int = 50
+) -> tuple[np.ndarray, np.ndarray]:
     """Recherche par produit scalaire en pur numpy — même logique que
     `EmbeddingIndex.search` (embeddings_search.py), extraite ici pour
     comparer sa vitesse à FAISS sur exactement les mêmes vecteurs.
