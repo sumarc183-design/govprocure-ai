@@ -847,6 +847,66 @@ marchés communs. Un utilisateur qui explore des filtres très variés
 cache. Le gain réel dépend donc du profil d'usage (répétitif vs
 exploratoire), pas garanti dans tous les cas.
 
+### Vrai index FAISS : prototype et benchmark
+
+**Ce qui a été fait** : construction d'un vrai index FAISS (pas
+seulement un cache disque) sur un échantillon réaliste de 50 000
+marchés uniques, via `src/search/faiss_index.py` (classe
+`FaissEmbeddingIndex`) et `src/search/build_faiss_index.py` (lancement :
+`python -m src.search.build_faiss_index`). Deux variantes testées :
+`IndexFlatIP` (recherche exacte, même méthode mathématique que le
+bruteforce numpy actuel) et `IndexIVFFlat` (recherche approximative par
+clustering, `nlist=100`).
+
+**Ce qui n'a pas été fait, assumé** : précalculer les 1,73M marchés
+uniques du corpus complet — l'encodage des 50 000 marchés de ce
+prototype a déjà pris **1862 s (~31 min)** sur cette machine (CPU, sans
+GPU garanti), ce qui confirme par extrapolation l'estimation déjà
+documentée (plusieurs heures pour le corpus complet, hors de portée
+d'un test ponctuel).
+
+**Résultat mesuré** (recherche répétée 20x, requête "entretien des
+espaces verts et tonte", moyenne) :
+
+| Méthode | Temps de recherche | Accord avec le bruteforce (top 20) |
+|---|---|---|
+| Bruteforce numpy (actuel) | 7,38 ms | — (référence) |
+| FAISS IndexFlatIP (exact) | 7,76 ms | 100% |
+| FAISS IndexIVFFlat (approx, nlist=100) | 3,20 ms | 100% |
+
+**Interprétation honnête, pas la conclusion attendue naïvement** : à
+cette échelle (50 000 vecteurs), **FAISS exact (`IndexFlatIP`) n'apporte
+aucun gain** — légèrement plus lent que le simple produit scalaire numpy
+(0,95x), parce que numpy s'appuie déjà sur des routines BLAS optimisées
+pour ce type d'opération, et que l'overhead de FAISS n'est pas encore
+rentabilisé à ce volume. **FAISS approximatif (`IndexIVFFlat`) apporte un
+gain réel et mesuré de 2,31x**, tout en retrouvant exactement les mêmes
+20 résultats que le bruteforce sur cette requête (100% d'accord, pas de
+perte de pertinence observée ici).
+
+**Limite de cette mesure** : un seul point de test (50 000 vecteurs, une
+requête). L'avantage de FAISS (surtout la variante exacte) devrait
+croître avec la taille du corpus — à des échelles bien plus grandes
+(centaines de milliers à millions de vecteurs), le bruteforce numpy
+devient linéairement plus coûteux alors que `IndexIVFFlat` reste
+sous-linéaire ; ce n'est pas mesuré ici (nécessiterait d'encoder un
+corpus bien plus grand, coûteux comme indiqué ci-dessus). L'accord à
+100% de l'IVF n'est pas non plus une garantie générale : `nprobe` (fixé
+ici à 10, soit 10% des clusters) contrôle un compromis vitesse/rappel
+qui devrait être revérifié avec un jeu de requêtes plus large avant
+d'être considéré fiable en production.
+
+**Conclusion pour ce projet** : le choix déjà documenté (cache disque
+plutôt que FAISS par défaut) reste raisonnable à l'échelle actuellement
+opérée par l'application (sous-ensembles filtrés de quelques centaines à
+quelques milliers de marchés) — FAISS n'apporte de valeur mesurée qu'en
+version approximative, et seulement si le sous-ensemble à interroger
+devient significativement plus grand que ce qui est filtré aujourd'hui.
+Le prototype (index sauvegardé dans
+`data/processed/faiss_index_demo.bin`) reste disponible pour une
+itération future si le projet doit un jour interroger le corpus complet
+sans filtre strict préalable.
+
 ## Test différé : transformation log des montants avant LOF
 
 Suggestion reçue lors de la toute première revue externe, testée
@@ -969,8 +1029,43 @@ cas). Pas de poids universellement meilleur identifié ; le paramètre
 `poids_fusion` reste optionnel plutôt que de changer le défaut sur la
 base d'un seul thème testé.
 
-**Non fait, pour aller plus loin** : tester sur les 3 autres thèmes pour
-voir si un poids donné généralise.
+**Généralisation aux 3 autres thèmes** : `compare_weighted_rrf.py` a été
+étendu pour tester les 3 configurations (poids égal, BM25 x3,
+embeddings x3) sur les 4 thèmes difficiles plutôt qu'un seul (script
+disponible via `python -m src.search.compare_weighted_rrf`, résultats
+complets sauvegardés dans `data/processed/comparaison_rrf_pondere.csv`) :
+
+| Thème | Poids égal (P@5 / P@10) | BM25 x3 (P@5 / P@10) | Embeddings x3 (P@5 / P@10) |
+|---|---|---|---|
+| cybersécurité | 0,4 / 0,2 | 0,4 / 0,2 | 0,4 / 0,2 |
+| travaux de voirie | 0,2 / 0,2 | 0,2 / **0,5** | **0,4** / 0,3 |
+| restauration scolaire | 0,6 / 0,3 | 0,2 / 0,1 | 0,6 / **0,6** |
+| espaces verts | 0,0 / 0,1 | 0,0 / 0,0 | 0,0 / 0,0 |
+
+**Conclusion, la question initiale est tranchée : le poids ne généralise
+pas.** Chaque thème réagit différemment, parfois en sens opposé :
+- **Favoriser BM25 (x3)** améliore nettement `travaux_voirie` (P@10 :
+  0,2 → 0,5) mais **dégrade fortement** `restauration_scolaire` (P@5 :
+  0,6 → 0,2 ; P@10 : 0,3 → 0,1) — l'inverse de ce qu'on observe sur
+  l'autre thème.
+- **Favoriser les embeddings (x3)** améliore `restauration_scolaire`
+  (P@10 : 0,3 → 0,6) et un peu `travaux_voirie` (P@5 : 0,2 → 0,4), sans
+  jamais faire pire que le poids égal sur aucun thème testé.
+- **cybersécurité et espaces verts sont insensibles au poids** : les
+  trois configurations donnent des scores identiques. Explication
+  probable : sur cybersécurité, BM25 et embeddings sont déjà globalement
+  d'accord sur le classement (peu de candidats à départager) ; sur
+  espaces verts, aucune des deux méthodes ne trouve de résultat pertinent
+  (0,0 partout, cf. limite du modèle d'embeddings déjà documentée
+  ci-dessus), donc changer leur pondération relative n'a rien à
+  redistribuer.
+
+Ceci confirme, avec des données sur les 4 thèmes plutôt qu'un seul, la
+prudence déjà exprimée : il n'existe pas de poids universellement
+meilleur pour ce corpus, et un poids optimisé sur un seul thème
+(`travaux_voirie` initialement) peut activement nuire à un autre
+(`restauration_scolaire`). Le paramètre `poids_fusion` reste donc
+optionnel, non activé par défaut.
 
 ## Tests fonctionnels du dashboard (Playwright)
 
