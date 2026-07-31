@@ -907,6 +907,55 @@ Le prototype (index sauvegardé dans
 itération future si le projet doit un jour interroger le corpus complet
 sans filtre strict préalable.
 
+### Modèle d'embeddings plus grand : l'hypothèse "espaces verts" testée
+
+**Ce qui a été fait** : réponse directe à la piste notée plus haut
+("un modèle plus grand pourrait faire mieux, à tester si le temps le
+permet") — comparaison de `paraphrase-multilingual-MiniLM-L12-v2`
+(modèle actuel, ~118M paramètres) à
+`paraphrase-multilingual-mpnet-base-v2` (~278M paramètres, même famille
+sentence-transformers), sur les 4 thèmes difficiles, via
+`src/search/compare_embedding_models.py` (lancement :
+`python -m src.search.compare_embedding_models`).
+
+**Résultat mesuré** :
+
+| Thème | MiniLM (P@5 / P@10) | mpnet (P@5 / P@10) |
+|---|---|---|
+| cybersécurité | 0,4 / 0,2 | 0,4 / 0,2 |
+| travaux de voirie | 0,2 / 0,2 | **0,4** / **0,3** |
+| restauration scolaire | 0,6 / 0,3 | 0,6 / 0,3 |
+| espaces verts | 0,0 / 0,1 | 0,0 / **0,0** |
+
+**Interprétation honnête, l'hypothèse initiale n'est pas confirmée** :
+le cas que ce test visait spécifiquement à corriger — "espaces verts",
+0,0 partout depuis le bloc 5 — **n'est pas résolu par le modèle plus
+grand**. mpnet reste à 0,0 en P@5 (comme MiniLM) et **régresse même
+légèrement en P@10** (0,1 → 0,0). L'hypothèse posée (MiniLM ne capture
+pas assez bien la proximité sémantique "maintenance des parcs
+municipaux" / "espaces verts") ne semble donc pas être la bonne
+explication — la taille du modèle n'est probablement pas le facteur
+limitant ici, plus vraisemblablement l'absence de tout candidat
+réellement pertinent dans l'échantillon interrogé, ou une reformulation
+trop éloignée pour n'importe quel modèle de cette famille.
+
+**Effet secondaire positif, sur un thème différent de celui visé** :
+mpnet améliore nettement "travaux de voirie" (P@5 : 0,2 → 0,4 ; P@10 :
+0,2 → 0,3), déjà identifié comme un cas où la fusion RRF diluait un
+signal BM25 correct — les deux autres thèmes (cybersécurité,
+restauration scolaire) sont inchangés.
+
+**Conclusion pour ce projet** : pas de gain qui justifierait de changer
+le modèle par défaut — coût (modèle ~2,4x plus lourd, téléchargement de
+~1 Go, ré-encodage plus lent, cache dédié non partageable avec MiniLM)
+sans bénéfice sur le cas qui motivait le test. Le choix de MiniLM reste
+la meilleure décision risque/bénéfice pour ce projet ; l'amélioration
+observée sur "travaux de voirie" est un résultat secondaire intéressant
+mais insuffisant, seul, pour justifier un changement de modèle par
+défaut sur la base d'un seul thème (même prudence déjà exprimée pour la
+pondération RRF ci-dessous). Résultats complets sauvegardés dans
+`data/processed/comparaison_modeles_embeddings.csv`.
+
 ## Test différé : transformation log des montants avant LOF
 
 Suggestion reçue lors de la toute première revue externe, testée
