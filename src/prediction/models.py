@@ -42,13 +42,19 @@ def separer_train_test(X: pd.DataFrame, y: pd.Series, test_size: float = 0.2):
     return train_test_split(X, y, test_size=test_size, random_state=RANDOM_STATE)
 
 
-def _evaluer(y_true_log: np.ndarray, y_pred_log: np.ndarray) -> dict:
+def evaluer_predictions(y_true_log: np.ndarray, y_pred_log: np.ndarray) -> dict:
     """Calcule les métriques en espace log (entraînement) et en espace
     réel (expm1, nombre d'offres) pour rester interprétable métier.
 
     Clip à 0 après expm1 : le modèle peut prédire une valeur log légèrement
     négative (bruit), ce qui donnerait un nombre d'offres < 0 après
     reconversion — non-sens métier, corrigé par un plancher à 0.
+
+    Rendue publique (préfixe `_` retiré) quand run_hyperparameter_search.py
+    en a eu besoin pour évaluer un modèle sur un jeu de test tenu à part —
+    même principe que `retirer_accents()` au bloc 3/prédiction : une
+    fonction utilisée dans un seul module au départ, formalisée en API
+    partagée dès qu'un deuxième module en a besoin, plutôt que dupliquée.
     """
     y_true_reel = np.expm1(y_true_log)
     y_pred_reel = np.clip(np.expm1(y_pred_log), 0, None)
@@ -72,17 +78,17 @@ def entrainer_et_comparer(X: pd.DataFrame, y: pd.Series) -> dict:
 
     baseline = DummyRegressor(strategy="median")
     baseline.fit(X_train, y_train)
-    resultats["baseline_mediane"] = _evaluer(y_test.values, baseline.predict(X_test))
+    resultats["baseline_mediane"] = evaluer_predictions(y_test.values, baseline.predict(X_test))
 
     ridge = Ridge(random_state=RANDOM_STATE)
     ridge.fit(X_train, y_train)
-    resultats["ridge"] = _evaluer(y_test.values, ridge.predict(X_test))
+    resultats["ridge"] = evaluer_predictions(y_test.values, ridge.predict(X_test))
 
     rf = RandomForestRegressor(
         n_estimators=100, max_depth=15, random_state=RANDOM_STATE, n_jobs=-1
     )
     rf.fit(X_train, y_train)
-    resultats["random_forest"] = _evaluer(y_test.values, rf.predict(X_test))
+    resultats["random_forest"] = evaluer_predictions(y_test.values, rf.predict(X_test))
 
     resultats["_rf_feature_importance"] = pd.Series(
         rf.feature_importances_, index=X.columns
@@ -113,7 +119,7 @@ def validation_croisee(X: pd.DataFrame, y: pd.Series, modele, n_splits: int = 5)
 
         modele.fit(X_train, y_train)
         pred = modele.predict(X_test)
-        resultats_par_pli.append(_evaluer(y_test.values, pred))
+        resultats_par_pli.append(evaluer_predictions(y_test.values, pred))
 
     r2_reel_list = [r["r2_reel"] for r in resultats_par_pli]
     mae_reel_list = [r["mae_reel"] for r in resultats_par_pli]
