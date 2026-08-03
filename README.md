@@ -16,7 +16,7 @@
 | **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels, cache disque des embeddings (gain mesuré : 47x) |
 | **Prédiction** | Régression du nombre d'offres reçues (Random Forest, R²=0,676, MAE=5,45 offres), biais de sélection des données identifié et documenté |
 | **Robustesse** | 2 bugs méthodologiques trouvés via revue externe et corrigés (déduplication, calcul NDCG), documentés avec preuve avant/après |
-| **Tests** | 111 tests collectés — 106 s'exécutent intégralement en CI ; les 5 tests fonctionnels du dashboard nécessitent les données locales (sautés en CI, dataset non versionné) et, une fois exécutés en local, 3 passent et 2 sont `xfail` (limite documentée de l'automatisation headless) |
+| **Tests** | 112 tests collectés — 107 s'exécutent intégralement en CI ; les 5 tests fonctionnels du dashboard nécessitent les données locales (sautés en CI, dataset non versionné) et, une fois exécutés en local, 3 passent et 2 sont `xfail` (limite documentée de l'automatisation headless) |
 
 ## Le projet en images
 
