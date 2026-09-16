@@ -1,48 +1,51 @@
-# Roadmap
+# Roadmap produit et technique
 
-Planning indicatif sur 8 semaines. Chaque bloc intègre ses propres tests de robustesse au fur et à mesure plutôt qu'en fin de projet.
+## Statut actuel
 
-| Semaine | Bloc | Statut | Livrable attendu |
+**Version : v1.0 — finalisée**
+**Positionnement : démonstrateur data/IA reproductible pour l'analyse de la commande publique française.**
+
+La version v1.0 couvre le périmètre annoncé. Les éléments ci-dessous sont livrés, documentés et couverts par la chaîne de qualité du dépôt. Les pistes post-v1.0 sont des améliorations identifiées ; elles ne sont pas présentées comme des fonctionnalités déjà disponibles.
+
+## Livré en v1.0
+
+| Domaine | État | Livrable | Preuve / documentation |
 |---|---|---|---|
-| 0.5 | Setup + audit des données | ✅ Terminé | Repo initialisé, CI en place, rapport d'audit du dataset |
-| 1 | Bloc 1 — Qualité des données | ✅ Terminé | Score de qualité par variable/période |
-| 2–3 | Bloc 2 — Détection d'anomalies | ✅ Terminé | Isolation Forest + LOF comparés, tests de stabilité |
-| 4–5.5 | Bloc 3 — Recherche hybride | ✅ Terminé | Moteur SQL + BM25 + embeddings, métriques Precision@K/NDCG |
-| 6 | Bloc 4 — Dashboard | ✅ Terminé | Interface Streamlit fonctionnelle |
-| 7–8 | Bloc 5 — Consolidation robustesse | ✅ Terminé | Rapport de limites, drift, reproductibilité, biais |
-| Bonus | Bloc prédiction — Régression supervisée | ✅ Terminé | Prédiction du nombre d'offres reçues, comparaison de modèles |
+| Fondations | Terminé | Repo Python, dépendances épinglées, CI, données externes documentées | `README.md`, `.github/workflows/tests.yml` |
+| Qualité des données | Terminé | Audit par colonne, normalisation et règles de cohérence | `src/quality/`, `docs/data_sources.md` |
+| Anomalies | Terminé | Isolation Forest + LOF, déduplication par marché, tests de stabilité | `src/anomaly/`, `docs/limitations.md` |
+| Recherche hybride | Terminé | Filtres, BM25, embeddings, RRF et métriques d'évaluation | `src/search/`, `docs/decisions.md` |
+| Interface | Terminé | Dashboard Streamlit et export CSV | `src/dashboard/` |
+| Prédiction | Terminé | Baseline, Ridge et Random Forest sur `offresRecues` | `src/prediction/` |
+| Consolidation | Terminé | Documentation des biais, correctifs méthodologiques, tests et validation CI | `docs/synthese_finale.md`, `tests/` |
 
-Légende statut : 🔲 à faire · 🟡 en cours · ✅ terminé
+## Améliorations post-v1.0
 
-## Bloc 5 — détail des points traités
+| Priorité | Sujet | Objectif | Critère de complétion |
+|---|---|---|---|
+| Haute | Index vectoriel persistant | Pré-calculer les embeddings de tout le corpus dans FAISS ou Qdrant | Recherche sémantique sur le corpus complet sans recalcul à la requête |
+| Haute | Jeu d'évaluation humain | Étendre et séparer l'annotation de la personne qui construit les requêtes | Jeu de test versionné, protocole d'annotation et accord inter-annotateur mesurés |
+| Moyenne | Modèle d'embeddings | Comparer un modèle multilingue plus performant au modèle CPU léger | Gain de qualité mesuré sur les requêtes difficiles, avec coût documenté |
+| Moyenne | Fusion des rangs | Évaluer les poids RRF sur un corpus de requêtes plus large | Poids sélectionnés sur validation, sans dégrader les requêtes de référence |
+| Moyenne | Observabilité des données | Suivre volume, schéma, taux de manquants et dérive entre deux téléchargements | Rapport de drift automatisé et seuils d'alerte documentés |
+| Basse | Déploiement | Ajouter API, authentification, stockage et supervision | Architecture, sécurité et SLA définis avant toute mise à disposition externe |
 
-1. ✅ Déduplication par marché avant détection d'anomalies (bug trouvé via revue externe, corrigé)
-2. ✅ Correction NDCG@K et Precision@K (bugs trouvés via revue externe, corrigés)
-3. ✅ Évaluation du pipeline hybride sur requêtes difficiles (résultat nuancé documenté)
-4. ✅ Annotation humaine (100% d'accord sur 3 thèmes/4)
-5. ✅ Mesure du temps de réponse (~28s, goulot = embeddings, identifié et chiffré)
-6. ✅ Vérification manuelle finale du dashboard (aucune régression)
-7. ✅ Synthèse finale (docs/synthese_finale.md)
-8. ✅ README recruteur (accroche, chiffres clés, captures, données, badge CI, licence)
+## Hors périmètre v1.0
 
-## Itérations post-bloc 5 (recommandations de la synthèse finale, réalisées)
+Les sujets suivants nécessitent une décision produit, des données supplémentaires ou une infrastructure dédiée. Ils ne font pas partie du livrable actuel :
 
-1. ✅ Cache disque des embeddings (recommandation n°1) — gain mesuré : 47x plus rapide (23,7s → 0,5s)
-2. ✅ Centralisation de la normalisation de texte (recommandation n°2) — module `src/common/text_normalization.py` ; complétée ensuite en extrayant la primitive de retrait d'accents (`retirer_accents`), désormais réutilisée par `cleaning.py` et `bm25_search.py` sans changement de comportement
-3. ✅ Transformation log des montants avant LOF (suggestion différée depuis la 1ère revue externe) — taux d'accord Isolation Forest/LOF triplé (4,5% → 13,0%)
-4. ✅ Pondération RRF non uniforme, testée sur le cas "travaux de voirie" — résultat nuancé (favoriser BM25 améliore le top 10, favoriser les embeddings améliore le top 5, pas de poids universellement meilleur identifié sur ce seul cas)
-5. ✅ Tests fonctionnels du dashboard (Playwright) — 3/5 fiables (titre, onglets, tableau qualité), 2/5 marqués `xfail` après 9 tentatives de correction (limite de l'automatisation headless, pas un bug du dashboard)
+- qualification juridique ou détection automatique de fraude ;
+- décision automatisée sur un marché public ;
+- mise à jour temps réel des données ;
+- index vectoriel complet et hébergé ;
+- gestion des utilisateurs, droits d'accès, API publique et SLA.
 
-## Bloc prédiction — détail
+## Principes d'évolution
 
-- Cible : `offresRecues` (nombre d'offres reçues par marché), vraie variable observée, pas une étiquette fabriquée
-- Modèles comparés : baseline (médiane), Ridge, Random Forest
-- Résultat : Random Forest R²(réel)=0,676, MAE=5,45 offres — bat nettement la baseline et Ridge
-- Biais de sélection identifié et documenté : le taux de valeurs manquantes dépend fortement du type de procédure (31% à 100%)
-- Bug bonus trouvé et corrigé : la colonne `procedure` n'avait jamais été normalisée (16 → 11 vraies catégories)
+Toute évolution significative doit :
 
-## Décisions de périmètre
-
-- Anomalies : Isolation Forest + Local Outlier Factor traités en profondeur. Autoencodeur et XGBoost en extension possible si le temps le permet.
-- Recherche : priorité donnée à ce bloc (le plus différenciant techniquement).
-- Dashboard : volontairement simple, assemblage des blocs existants plutôt que recherche UX poussée.
+1. partir d'un besoin métier ou d'une limite documentée ;
+2. inclure des critères de succès quantifiés ;
+3. préserver la traçabilité des données et des décisions ;
+4. être testée dans la CI et documentée dans le changelog ;
+5. ne jamais transformer une anomalie statistique en accusation de fraude.

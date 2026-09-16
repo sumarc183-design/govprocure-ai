@@ -2,101 +2,84 @@
 
 [![Tests](https://github.com/sumarc183-design/govprocure-ai/actions/workflows/tests.yml/badge.svg)](https://github.com/sumarc183-design/govprocure-ai/actions/workflows/tests.yml)
 
-> Une plateforme d'analyse des marchés publics français — qualité des données, détection d'anomalies, recherche hybride en langage naturel — construite sur les 3,14 millions de contrats publiés en open data, avec chaque décision technique et chaque bug documentés dans le code de leur découverte à leur correction.
+> Plateforme d'analyse des marchés publics français : contrôle de qualité des données, détection d'anomalies, recherche hybride en langage naturel et prédiction du nombre d'offres reçues.
 
-**[📄 Lire la synthèse finale](docs/synthese_finale.md)** — ce que le projet sait faire, ce qu'il ne sait pas faire, ce qui serait fait différemment en production.
+**Statut : v1.0 — périmètre fonctionnel finalisé.** Le projet est conçu comme une démonstration technique reproductible et documentée, et non comme un outil de décision automatisée en production. Consultez le [statut de livraison](docs/project_status.md) pour le périmètre exact et les validations réalisées.
 
-## En bref
+## Pourquoi ce projet
 
-| | |
+GovProcure AI applique des méthodes de data science et de recherche d'information à **3,14 millions** de lignes de données ouvertes sur la commande publique. L'objectif est de rendre ces données plus faciles à explorer, tout en explicitant les limites méthodologiques : une anomalie statistique n'est jamais assimilée à une fraude et les résultats restent destinés à l'examen humain.
+
+| Domaine | Résultat livré |
 |---|---|
-| **Données** | 3,14M marchés publics (data.gouv.fr / decp.info), 1,73M marchés uniques après regroupement |
-| **Qualité** | Score de fiabilité par colonne — 64 408 montants incohérents détectés, catégories normalisées |
-| **Anomalies** | Isolation Forest + LOF comparés, taux d'accord de 4,5% (13,0% avec transformation log testée) — résultat stable, cohérent avec des notions différentes de l'anomalie (pas une preuve de complémentarité en soi, une validation métier serait nécessaire) |
-| **Recherche** | Filtres + BM25 + embeddings + RRF — passé de 0/10 à 8/10 résultats pertinents après diagnostic et correction de 2 bugs réels, cache disque des embeddings (gain mesuré : 47x) |
-| **Prédiction** | Régression du nombre d'offres reçues (Random Forest, R²=0,676, MAE=5,45 offres), biais de sélection des données identifié et documenté |
-| **Robustesse** | 2 bugs méthodologiques trouvés via revue externe et corrigés (déduplication, calcul NDCG), documentés avec preuve avant/après |
-| **Tests** | 112 tests collectés — 107 s'exécutent intégralement en CI ; les 5 tests fonctionnels du dashboard nécessitent les données locales (sautés en CI, dataset non versionné) et, une fois exécutés en local, 3 passent et 2 sont `xfail` (limite documentée de l'automatisation headless) |
+| Données | 3,14 M de lignes ; ~1,73 M marchés après regroupement des cotraitants |
+| Qualité | Score de fiabilité par colonne et détection de 64 408 montants incohérents |
+| Anomalies | Isolation Forest et LOF, avec comparaison de stabilité et traçabilité des alertes |
+| Recherche | Filtres, BM25, embeddings et RRF ; cache disque mesuré 47× plus rapide sur une requête répétée |
+| Prédiction | Random Forest sur `offresRecues` : R² = 0,676 ; MAE = 5,45 offres |
+| Qualité logicielle | Tests, lint, vérification de types et CI GitHub Actions |
 
-## Le projet en images
+## Aperçu
 
-![Qualité des données](docs/images/dashboard-qualite-donnees.png)
-![Détection d'anomalies](docs/images/dashboard-anomalies-resultats.png)
-![Recherche hybride](docs/images/dashboard-recherche-resultats.png)
+| Qualité des données | Détection d'anomalies | Recherche hybride |
+|---|---|---|
+| ![Qualité des données](docs/images/dashboard-qualite-donnees.png) | ![Détection d'anomalies](docs/images/dashboard-anomalies-resultats.png) | ![Recherche hybride](docs/images/dashboard-recherche-resultats.png) |
 
-## Pourquoi ce projet est différent d'un portfolio classique
+## Fonctionnalités
 
-Ce n'est pas un projet où "tout marche parfaitement". Trois exemples concrets :
+1. **Audit et qualité des données** — scores de complétude et règles explicites pour les montants, dates et catégories.
+2. **Détection d'anomalies** — deux méthodes complémentaires, exécutées sur des marchés dédupliqués avant analyse.
+3. **Recherche hybride** — filtres métier, recherche lexicale BM25, recherche sémantique par embeddings et fusion par Reciprocal Rank Fusion.
+4. **Dashboard Streamlit** — interface à trois onglets avec export CSV des résultats.
+5. **Prédiction supervisée** — comparaison d'une baseline, Ridge et Random Forest pour `offresRecues`.
 
-- **Un bug trouvé et corrigé en direct** : la fonction de détection d'anomalies ne dédupliquait pas les marchés en cotraitance, faussant le taux d'accord entre modèles et faisant apparaître les mêmes marchés plusieurs fois dans les alertes. Trouvé via une revue externe du code, corrigé, chiffres recalculés avant/après (voir [decisions.md](docs/decisions.md)).
-- **Un calcul de métrique corrigé** : le NDCG@K initial ne pénalisait pas les résultats pertinents manqués (`P@10=0.7` donnait pourtant `NDCG@10=1.0`, incohérent). Corrigé, effet mesuré : `0.431 → 0.146` sur un cas réel.
-- **Un résultat nuancé plutôt qu'idéalisé** : sur 4 requêtes de recherche reformulées sans aucun mot en commun avec la vérité terrain, les embeddings sauvent la mise sur 2 thèmes, dégradent le résultat sur 1, et échouent totalement sur le dernier. Documenté tel quel plutôt que présenté comme une victoire uniforme.
-- **Un biais de sélection assumé, pas caché** : le modèle de prédiction (nombre d'offres reçues) n'apprend que sur les ~40% de marchés où cette donnée est renseignée — et ce taux de renseignement varie de 31% à 100% selon le type de procédure. Documenté comme une vraie limite du modèle, pas contourné par une imputation artificielle.
+## Démarrage rapide
 
-## Structure du repo
+### Prérequis
 
-```
-govprocure-ai/
-├── data/
-│   ├── raw/            # données brutes (non versionnées, voir .gitignore)
-│   └── processed/      # données nettoyées / transformées (cache embeddings, etc.)
-├── src/
-│   ├── common/          # normalisation de texte partagée
-│   ├── quality/         # Bloc 1 — contrôle qualité des données
-│   ├── anomaly/         # Bloc 2 — détection d'anomalies
-│   ├── search/          # Bloc 3 — moteur de recherche hybride + évaluation
-│   ├── dashboard/        # Bloc 4 — interface Streamlit
-│   └── prediction/       # Bloc bonus — régression supervisée (offresRecues)
-├── tests/              # tests unitaires et de robustesse (pytest)
-├── docs/               # documentation, roadmap, décisions, limites
-└── .github/workflows/  # CI (GitHub Actions)
-```
+- Python 3.11 ou supérieur
+- ~250 Mo disponibles pour le jeu de données Parquet
 
-## Installation
+### Installation
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Windows : venv\Scripts\activate
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
-## Récupérer les données
+### Données
 
-Le dataset (~200 Mo) n'est pas versionné dans ce repo (voir `.gitignore`) —
-il faut le télécharger séparément avant de lancer le dashboard ou les scripts.
+Le dataset n'est pas versionné afin de respecter la taille du dépôt. Téléchargez le fichier Parquet depuis [data.gouv.fr](https://www.data.gouv.fr/api/1/datasets/r/11cea8e8-df3e-4ed1-932b-781e2635e432), renommez-le `decp.parquet`, puis placez-le ici :
 
-1. **Télécharger le fichier Parquet** directement ici :
-   [`https://www.data.gouv.fr/api/1/datasets/r/11cea8e8-df3e-4ed1-932b-781e2635e432`](https://www.data.gouv.fr/api/1/datasets/r/11cea8e8-df3e-4ed1-932b-781e2635e432)
-   (page du jeu de données : [data.gouv.fr — DECP consolidées, format tabulaire](https://www.data.gouv.fr/datasets/donnees-essentielles-de-la-commande-publique-consolidees-format-tabulaire))
-
-2. **Renommer** le fichier téléchargé en `decp.parquet`
-
-3. **Placer** le fichier dans `data/raw/decp.parquet` (créer le dossier `data/raw/` s'il n'existe pas)
-
-```bash
-mkdir -p data/raw
-# après téléchargement, déplacer/renommer le fichier :
-mv ~/Downloads/*.parquet data/raw/decp.parquet
+```text
+data/raw/decp.parquet
 ```
 
-⚠️ Ce dataset est mis à jour quasi quotidiennement par sa source
-(decp.info) — les chiffres exacts documentés dans `docs/limitations.md`
-peuvent légèrement varier d'un téléchargement à l'autre (nombre de
-lignes, valeurs précises), sans remettre en cause les conclusions.
+La source est mise à jour fréquemment : les chiffres documentés correspondent donc à la version auditée et peuvent varier légèrement après un nouveau téléchargement. Les détails figurent dans les [sources de données](docs/data_sources.md).
 
-## Lancer le dashboard
+### Lancer l'application
 
 ```bash
 streamlit run src/dashboard/app.py
 ```
 
-## Lancer les tests
+## Vérification et qualité
 
 ```bash
+# Suite unitaire et intégration sans navigateur
 pytest tests/ -v
+
+# Qualité de code
+ruff check src/ tests/
+mypy --ignore-missing-imports src/
 ```
 
-Pour lancer aussi les tests fonctionnels du dashboard (Playwright, nécessite le dataset local — voir "Récupérer les données" ci-dessus) :
+Les cinq tests fonctionnels du dashboard requièrent le dataset local et Playwright :
 
 ```bash
 pip install -r requirements-dev.txt
@@ -104,31 +87,39 @@ playwright install chromium
 pytest tests/test_dashboard_functional.py -v
 ```
 
-## Qualité de code
+La CI exécute la suite compatible sans dataset local, le lint et le contrôle de types à chaque push et pull request.
 
-Lint (`ruff`) et vérification de types (`mypy`) tournent en CI dans un job
-séparé des tests (voir `.github/workflows/tests.yml`), pour reproduire en local :
+## Architecture
 
-```bash
-pip install ruff mypy
-ruff check src/ tests/
-mypy --ignore-missing-imports src/
+```text
+src/
+├── common/       # normalisation de texte partagée
+├── quality/      # audit, chargement et nettoyage
+├── anomaly/      # features, Isolation Forest, LOF, robustesse
+├── search/       # filtres, BM25, embeddings, RRF et évaluation
+├── dashboard/    # interface Streamlit
+└── prediction/   # features, entraînement et évaluation
 ```
 
-## Documentation complète
+## Documentation
 
-- [**Synthèse finale**](docs/synthese_finale.md) — vue d'ensemble : ce qui fonctionne, les limites, les recommandations production
-- [Décisions techniques (ADR)](docs/decisions.md) — chaque choix technique, pourquoi, et les alternatives écartées
-- [Limites et résultats détaillés](docs/limitations.md) — tous les chiffres, bugs, et découvertes, bloc par bloc
-- [Roadmap](docs/roadmap.md) — avancement du projet
-- [Sources de données](docs/data_sources.md) — origine et structure du dataset
+- [Statut de livraison](docs/project_status.md) — périmètre livré, validation et conditions de fonctionnement.
+- [Synthèse finale](docs/synthese_finale.md) — résultats, limites et recommandations de production.
+- [Roadmap](docs/roadmap.md) — réalisé en v1.0 et axes post-v1.0 priorisés.
+- [Décisions techniques](docs/decisions.md) — choix d'architecture et corrections de bugs documentées.
+- [Limites et résultats détaillés](docs/limitations.md) — robustesse, biais et limites connues.
+- [Sources de données](docs/data_sources.md) — provenance, granularité et audit du jeu de données.
+- [Changelog](CHANGELOG.md) — historique des versions et de la maintenance.
 
-## Stack technique
+## Périmètre et limites
 
-Python, pandas, scikit-learn, sentence-transformers, rank_bm25, Streamlit, pytest, GitHub Actions.
+- Les anomalies servent à **prioriser une revue humaine** ; elles ne constituent pas une détection de fraude.
+- Le modèle de prédiction est soumis à un biais de sélection, car `offresRecues` est incomplet.
+- Le premier calcul d'embeddings sur un sous-ensemble non mis en cache reste coûteux sur CPU.
+- Le projet ne fournit pas d'API, d'authentification, de SLA ni d'infrastructure de production.
+
+Ces limites ne sont pas cachées : elles sont détaillées dans la [synthèse finale](docs/synthese_finale.md) et dans les [limites](docs/limitations.md).
 
 ## Licence
 
-Projet personnel réalisé dans le cadre d'une candidature. Tous droits
-réservés — pas de licence open source explicite à ce stade. Les données
-utilisées (DECP, data.gouv.fr) sont sous [Licence Ouverte / Open Licence 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence).
+Projet personnel réalisé dans le cadre d'une candidature. Tous droits réservés — aucune licence open source n'est accordée à ce stade. Les données DECP utilisées sont disponibles sous [Licence Ouverte / Open Licence 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence).
