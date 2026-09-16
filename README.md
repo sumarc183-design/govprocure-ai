@@ -17,7 +17,7 @@ GovProcure AI applique des méthodes de data science et de recherche d'informati
 | Anomalies | Isolation Forest et LOF, avec comparaison de stabilité et traçabilité des alertes |
 | Recherche | Filtres, BM25, embeddings et RRF ; cache disque mesuré 47× plus rapide sur une requête répétée |
 | Prédiction | Random Forest sur `offresRecues` : R² = 0,676 ; MAE = 5,45 offres |
-| Qualité logicielle | Tests, lint, vérification de types et CI GitHub Actions |
+| Qualité logicielle | Tests, lint, vérification de types, audit des dépendances et CI GitHub Actions |
 
 ## Aperçu
 
@@ -87,7 +87,7 @@ playwright install chromium
 pytest tests/test_dashboard_functional.py -v
 ```
 
-La CI exécute la suite compatible sans dataset local, le lint et le contrôle de types à chaque push et pull request.
+La CI exécute la suite compatible sans dataset local, le lint, le contrôle de types et un audit des dépendances (`pip-audit`) à chaque push et pull request.
 
 ## Architecture
 

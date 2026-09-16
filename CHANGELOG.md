@@ -4,6 +4,13 @@ Toutes les évolutions significatives du projet sont consignées dans ce documen
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le versioning suit les principes de [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [Unreleased]
+
+### Sécurité
+
+- Retrait de `.claude/settings.local.json` du suivi Git ; le fichier reste ignoré et local.
+- Ajout de `pip-audit` à la CI sur les dépendances épinglées.
+
 ## [1.0.0] — 2026-09-16
 
 ### Ajouté
